@@ -1,0 +1,20 @@
+name: Package Pipeline plugins
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: tarous89/intel_mcp
+          ref: eaee7070e05a8247f1121209a1345daa7e7d7000
+          path: vendor/intel_mcp
+      - run: python scripts/package-plugins.py vendor/intel_mcp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-review-packages
+          path: dist/*.zip
+          if-no-files-found: error

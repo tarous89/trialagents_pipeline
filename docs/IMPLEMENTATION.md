@@ -57,14 +57,14 @@ Read-only members can change their own profile and preference records. An owner 
 
 Use Intel signup, login, reset, account settings and OAuth. Resolve the same TrialAgents user ID and keep Pipeline workspace membership separate. Hosted sign-in must return to the initiating Pipeline workspace or assistant connection. Validate the host/audience, redirect and active workspace. Test existing Intel users and first-time users.
 
-**Pricing contract.** Individual use is assumed free. Pipeline Team costs **USD 49 per workspace per month**, unlimited editors and read-only members combined. One recurring Stripe price, quantity one. The owner pays. Existing Intel subscriptions are independent. A second invite or changing a role never creates a second subscription.
+**Pricing contract.** Individual use is free. Pipeline Team costs **USD 49 per workspace per month**, unlimited editors and read-only members combined. One recurring Stripe price, quantity one. The owner pays. Existing Intel subscriptions are independent. A second invite or changing a role never creates a second subscription.
 
 1. Owner selects **Invite member**. A free workspace sees the price and what it unlocks. Keep the draft address and role through checkout. Send the invitation after verified entitlement and owner confirmation.
 2. Build checkout and portal sessions server-side using the authenticated owner and workspace. Map the Pipeline-specific price, customer, subscription and workspace. Reuse Intel's Stripe client and test/live configuration. Redirect return shows pending status until the server confirms payment.
 3. Extend the existing signed webhook dispatcher with a Pipeline-specific handler. Persist event IDs, reconcile subscription state idempotently, and tolerate duplicates and out-of-order events. Verify product, amount/currency and workspace association. A delayed event for an older subscription cannot overwrite a newer renewal.
 4. Invitations are verified-email-bound, single-use, expiring and revocable. Store token digests. Both issue and accept operations check current owner authority or recipient identity as appropriate, workspace and active team entitlement. Duplicate acceptance is idempotent. Re-inviting an existing member must preserve their current role unless the owner explicitly changes it.
 5. Use Stripe test mode to exercise first checkout, repeated checkout clicks, renewal, canceled checkout, pending payment, invoice failure/recovery, portal cancellation, expiry and resubscription. Quarantine unknown mappings for reconciliation. Email retries never create extra memberships.
-6. **Commercial decision pending:** proposed policy is to retain teammate access through the paid period, then suspend invitee access, preserve data/memberships and restore access on renewal. Owner retains individual access. Confirm delinquency/grace rules and expiry policy before enabling live charges.
+6. **Subscription expiry.** Retain teammate access through the verified paid period. Suspend invitee access afterwards, preserve data and memberships, and restore access on renewal. The owner retains individual access.
 
 ## Shared services and data
 
@@ -95,9 +95,9 @@ Page heavy feeds, attachments, saved views and logs on demand. Cache by workspac
 | --- | --- |
 | 1. Design baseline | Approve browser and embedded visual diffs against the pinned Intel controls and final Pipeline flows. Check desktop, mobile, active/hover/focus, drawers and filters. |
 | 2. Persistence and identity | One owner signs in, creates a program and milestone, reopens them after a new session and sees a matching Logs entry. Two independent workspaces cannot read each other's records. |
-| 3. Paid collaboration | Test-mode purchase, invitation, both member roles, removal, renewal, cancellation and replay tests pass. Confirm expiry policy. |
+| 3. Paid collaboration | Test-mode purchase, invitation, both member roles, removal, renewal, cancellation and replay tests pass. Verify the approved expiry and renewal behavior. |
 | 4. Assistant integration and customization | Same milestone write is visible on all three surfaces. Editors save and filter shared views. Only the owner can change navigation or styling. Conflicts and retries produce one saved change and audit event. |
 | 5. Settings and operations | Preferences follow the user across hosts, support reaches the configured team, notification delivery respects membership and deduplication, billing portal is owner-only. |
 | 6. Shared Render launch | Review pinned integrations in Intel repos, run migrations, performance and existing-Intel regression checks, verify domain and TLS, then verify live web and both private assistant connections. Submit each directory package and record its result. |
 
-This scope authorizes planning and preview work in this repo. Production service changes, DNS, live price configuration, customer invitations and directory publication belong to the implementation and release phases.
+The browser and assistant release candidates, integration pull requests, and live acceptance steps are described in [the release guide](RELEASE.md).

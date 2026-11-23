@@ -28,4 +28,6 @@ Pixel fidelity applies to every copied component, including buttons, typography,
 
 ## Verification boundary
 
-The baseline hash was checked against the committed HTML. The standalone script was syntax checked and exercised in a JavaScript rendering harness across all nine top-level entries and seven Settings sections. Screenshot diff approval, live host testing, database migrations, payment tests and shared-service deployment remain implementation gates.
+The original HTML hash matches the committed handoff. Building the production candidate runs PostgreSQL-backed role, invitation, subscription, record, saved-view and audit checks, plus desktop and mobile Chromium flows. A constant-query test uses 20 and 200 visible programs. Each warm workspace bootstrap uses four queries, including one membership check, at both sizes.
+
+A Chromium comparison used the pinned Intel styles in their original order and the shared-frame markup with identical labels. At 1366 px header width, the full 78 px header crop matched pixel for pixel. At 390 px, the first 116 rows matched. The one remaining raster row blends into the different bodies below the fractional-height header. Live assistant window chrome, account pages, hover states and full-app visual acceptance remain release checks. See the [release guide](RELEASE.md).
