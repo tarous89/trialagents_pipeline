@@ -33,7 +33,7 @@ test('the connected workspace uses the standalone layout, edits records, links t
  bridge.oncalltool=p=>window.dispatch(p);bridge.onopenlink=p=>window.opened(p.url).then(()=>({}));
  bridge.oninitialized=()=>bridge.sendToolResult(${JSON.stringify(open)});
  bridge.connect(new PostMessageTransport(iframe.contentWindow,iframe.contentWindow)).then(()=>iframe.src='/widget');`},bundle:true,write:false,format:'iife'})
- const browser=await chromium.launch({executablePath:await headless.executablePath(),args:headless.args})
+ const browser=await chromium.launch({executablePath:await headless.executablePath(),args:headless.args.filter(arg=>arg!=='--disable-web-security')})
  t.after(()=>browser.close())
  const page=await browser.newPage({viewport:{width:1150,height:850}}),links=[],calls=[],errors=[]
  page.on('pageerror',e=>errors.push(e.message))

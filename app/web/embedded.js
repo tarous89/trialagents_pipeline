@@ -28,8 +28,11 @@ function setRail(open){
  toggle.setAttribute('aria-label',label)
  toggle.title=label
 }
-setRail(!matchMedia('(max-width:800px)').matches)
-toggle.onclick=()=>setRail(rail.hidden)
+const compact=matchMedia('(max-width:800px)')
+let railOverride=false
+setRail(!compact.matches)
+compact.addEventListener('change',()=>{if(!railOverride)setRail(!compact.matches)})
+toggle.onclick=()=>{railOverride=true;setRail(rail.hidden)}
 window.pipelineLink=async raw=>{
  const url=new URL(raw)
  if(url.origin!==appOrigin)throw Error('Invalid workspace link')
@@ -63,7 +66,7 @@ function grant(workspace){
  return grants.get(workspace)
 }
 window.pipelineTransport=async request=>{
- const send=async secret=>fetch('/api/pipeline/frame',{method:'POST',credentials:'omit',cache:'no-store',headers:{'Content-Type':'application/json','X-Pipeline-Surface':'workspace','Authorization':'Pipeline-Frame '+secret},body:JSON.stringify(request)})
+ const send=async secret=>fetch('/api/pipeline/frame',{method:'POST',mode:'same-origin',credentials:'omit',referrerPolicy:'strict-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-Pipeline-Surface':'workspace','Authorization':'Pipeline-Frame '+secret},body:JSON.stringify(request)})
  const current=grant(request.workspace)
  let res=await send(await current)
  if(res.status===401){
