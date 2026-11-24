@@ -16,9 +16,9 @@ export async function POST(request:NextRequest){
       if(!token)return reply({error:'Invalid authorization'},401);
       const info=await introspectAccessToken(token);
       const base=oauthResource().replace(/\/mcp$/,'');
-      if(!info.active||!info.sub||!String(info.scope).split(' ').includes('mcp:tools')||![base+'/pipeline/mcp',base+'/pipeline-claude/mcp'].includes(String(info.resource)))return reply({error:'Connect Pipeline'},401);
+      if(!info.active||!info.sub||!String(info.scope).split(' ').includes('mcp:tools')||![base+'/pipeline/chatgpt',base+'/pipeline-claude/mcp'].includes(String(info.resource)))return reply({error:'Connect Pipeline'},401);
       const [row]=await getSql()`SELECT id,email,first_name AS "firstName",last_name AS "lastName" FROM users WHERE id=${info.sub}`;
-      user=row;source=info.resource===base+'/pipeline/mcp'?'ChatGPT':'Claude';
+      user=row;source=info.resource===base+'/pipeline/chatgpt'?'ChatGPT':'Claude';
     }else{
       if(request.headers.get('origin')!=='https://pipeline.trialagents.com' && !(process.env.NODE_ENV!=='production'&&request.headers.get('origin')===request.nextUrl.origin))return reply({error:'Unexpected request origin'},403);
       user=await authenticatedUser(request);

@@ -3,7 +3,7 @@
   "mcpServers": {
     "trialagents-pipeline": {
       "type": "streamable-http",
-      "url": "https://mcp.trialagents.com/pipeline/mcp",
+      "url": "https://mcp.trialagents.com/pipeline/chatgpt",
       "extensions": {
         "com.openai": {
           "auth": {

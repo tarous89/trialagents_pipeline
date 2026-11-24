@@ -51,3 +51,42 @@ CREATE TABLE IF NOT EXISTS pipeline.file (
  PRIMARY KEY(workspace_id,item_id,id), FOREIGN KEY(workspace_id,item_id) REFERENCES pipeline.item(workspace_id,id) ON DELETE CASCADE
 );
 ALTER TABLE pipeline.view ADD COLUMN IF NOT EXISTS chart text NOT NULL DEFAULT '';
+CREATE TABLE IF NOT EXISTS pipeline.accepted_invitation (
+ digest text PRIMARY KEY, workspace_id uuid REFERENCES pipeline.workspace ON DELETE CASCADE,
+ user_id text NOT NULL, expires timestamptz NOT NULL
+);
+ALTER TABLE pipeline.view ADD COLUMN IF NOT EXISTS presentation text NOT NULL DEFAULT '';
+
+-- Only the workspace initializer can confer example status. Existing rows are user data.
+ALTER TABLE pipeline.item ADD COLUMN IF NOT EXISTS is_example boolean NOT NULL DEFAULT false;
+
+-- Business definitions are versioned with their workspace; system tables are never exposed.
+ALTER TABLE pipeline.workspace ADD COLUMN IF NOT EXISTS catalog jsonb NOT NULL DEFAULT '[]';
+CREATE TABLE IF NOT EXISTS pipeline.data_row (
+ workspace_id uuid NOT NULL REFERENCES pipeline.workspace(id), table_id text NOT NULL,
+ id text NOT NULL, values_json jsonb NOT NULL, PRIMARY KEY(workspace_id,table_id,id)
+);
+CREATE TABLE IF NOT EXISTS pipeline.link (
+ workspace_id uuid NOT NULL REFERENCES pipeline.workspace(id), relation_id uuid NOT NULL,
+ from_table text NOT NULL, from_id text NOT NULL, to_table text NOT NULL, to_id text NOT NULL,
+ PRIMARY KEY(workspace_id,relation_id,from_id,to_id)
+);
+CREATE INDEX IF NOT EXISTS pipeline_link_target ON pipeline.link(workspace_id,relation_id,to_id);
+CREATE INDEX IF NOT EXISTS pipeline_item_kind ON pipeline.item(workspace_id,kind,id);
+ALTER TABLE pipeline.view ADD COLUMN IF NOT EXISTS spec jsonb;
+ALTER TABLE pipeline.view ADD COLUMN IF NOT EXISTS version integer NOT NULL DEFAULT 1;
+ALTER TABLE pipeline.view ADD COLUMN IF NOT EXISTS form_state jsonb NOT NULL DEFAULT '{}';
+CREATE OR REPLACE FUNCTION pipeline.clean_business_links() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ DELETE FROM pipeline.link WHERE workspace_id=OLD.workspace_id AND
+ ((from_table=OLD.kind AND from_id=OLD.id) OR (to_table=OLD.kind AND to_id=OLD.id));
+ DELETE FROM pipeline.data_row WHERE workspace_id=OLD.workspace_id AND table_id=OLD.kind AND id=OLD.id;
+ RETURN OLD;
+END $$;
+DROP TRIGGER IF EXISTS clean_business_links ON pipeline.item;
+CREATE TRIGGER clean_business_links AFTER DELETE ON pipeline.item FOR EACH ROW EXECUTE FUNCTION pipeline.clean_business_links();
+CREATE TABLE IF NOT EXISTS pipeline.view_draft (
+ workspace_id uuid REFERENCES pipeline.workspace(id) ON DELETE CASCADE,actor text NOT NULL,id uuid NOT NULL,
+ payload jsonb NOT NULL, digest text NOT NULL,expires timestamptz NOT NULL DEFAULT now()+interval '1 day',
+ PRIMARY KEY(workspace_id,actor,id)
+);

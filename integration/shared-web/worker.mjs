@@ -9,7 +9,12 @@ try{
    await tx.unsafe(await readFile(new URL('../app/lib/pipeline/schema.sql',import.meta.url),'utf8')).simple()
  })
 }catch(e){console.error('Pipeline schema unavailable');await sql.end();process.exit(1)}
+let cleanAfter=0
 while(true){
+ if(Date.now()>=cleanAfter){
+   try{await sql`DELETE FROM pipeline.view_draft WHERE expires<=now()`;cleanAfter=Date.now()+3600000}
+   catch{cleanAfter=Date.now()+60000}
+ }
  try{await deliverMail(db,async job=>{
    const res=await fetch('https://api.resend.com/emails',{method:'POST',headers:{Authorization:'Bearer '+process.env.RESEND_API_KEY,'Content-Type':'application/json','Idempotency-Key':'pipeline/'+job.id},body:JSON.stringify({from:process.env.AUTH_FROM_EMAIL,to:[job.recipient],subject:job.subject,text:job.message}),signal:AbortSignal.timeout(10000)})
    if(!res.ok)throw Error('Mail unavailable')

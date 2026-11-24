@@ -68,7 +68,7 @@ Use Intel signup, login, reset, account settings and OAuth. Resolve the same Tri
 
 ## Shared services and data
 
-Use the existing Frankfurt Render services **intel-agent-app** (Node web app), **intel-mcp** (Python MCP) and **intel-agent-control-db** (application state). Use host/path dispatch, additive migrations and a Pipeline schema. Keep the Intel clinical warehouse, clinical reader, CTIS engine, scheduled ingestion and profile workflows outside Pipeline. The product runs standalone even though it shares service processes. This repo needs a versioned integration point in each existing deploy repo.
+Use the existing Frankfurt Render web service **intel-agent-app** and application database **intel-agent-control-db**. Pipeline owns its Node MCP handler and its schema in this repository. Assemble the shared web build from a pinned Pipeline commit. See [release routing](RELEASE.md).
 
 - Build a versioned Pipeline UI/server bundle and MCP adapter from this repository. Pin both in the Intel deployment repos, or vendor the exact reviewed revision at build time. Coordinate migrations before code activation. Each service continues to build from its current repo and production branch.
 - Register pipeline.trialagents.com as a custom domain on the existing web service and verify DNS/TLS. Route by explicit host allowlist. Serve Pipeline pages, auth returns, health checks and deep links on that host. Forward the dedicated Pipeline MCP route to the existing MCP service using streaming-compatible transport, or map a dedicated MCP hostname to that same service. Verify host headers, resource discovery, audience and callback URLs in both assistants before directory submission.

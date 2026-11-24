@@ -1,14 +1,11 @@
-"""Build both release archives using the exact artwork from the pinned Intel release."""
+"""Build directory archives only on an explicit release request."""
 from pathlib import Path
 import argparse
 import json
-import subprocess
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
-INTEL = "eaee7070e05a8247f1121209a1345daa7e7d7000"
 parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("intel_checkout", type=Path)
 parser.add_argument("--output", type=Path, default=ROOT / "dist")
 args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)
@@ -22,17 +19,16 @@ for host in ("chatgpt", "claude"):
     if host == "chatgpt":
         manifest = json.loads(payload["plugin.json"])
         artwork = ["assets/" + name + ".png" for name in ("composer-icon", "composer-icon-dark", "logo", "logo-dark")]
-        reference = "plugins/trialagents-intel/"
         review = manifest["extensions"]["com.openai"]["review"]["test_cases"]
         assert len(review["positive"]) == 5 and len(review["negative"]) == 3
-        assert json.loads(payload["mcp.json"])["mcpServers"]["trialagents-pipeline"]["url"].endswith("/pipeline/mcp")
+        assert json.loads(payload["mcp.json"])["mcpServers"]["trialagents-pipeline"]["url"].endswith("/pipeline/chatgpt")
     else:
         manifest = json.loads(payload[".claude-plugin/plugin.json"])
         artwork = [manifest["icon"]]
-        reference = "plugins/trialagents-intel-claude/"
         assert json.loads(payload[".mcp.json"])["mcpServers"]["trialagents-pipeline"]["url"].endswith("/pipeline-claude/mcp")
     for path in artwork:
-        payload[path] = subprocess.check_output(["git","-C",str(args.intel_checkout),"show",INTEL+":"+reference+path])
+        source = "claude-mark.png" if host == "claude" else "mark-dark.png" if "dark" in path else "mark-light.png"
+        payload[path] = (ROOT / "assets" / source).read_bytes()
         assert payload[path].startswith(b"\x89PNG\r\n\x1a\n")
     destination = args.output / f"trialagents-pipeline-{host}-{manifest['version']}.zip"
     with zipfile.ZipFile(destination, "w") as archive:
