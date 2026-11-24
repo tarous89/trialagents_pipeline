@@ -1,15 +1,24 @@
-// Install this revision into a clean checkout of the Intel web deploy repository.
-import {cp,mkdir} from 'node:fs/promises'
+// Assemble a disposable Render build directory from a pinned Pipeline checkout.
+import {cp,mkdir,readFile,access} from 'node:fs/promises'
 import {execFileSync} from 'node:child_process'
 import path from 'node:path'
-const target=process.argv[2]
-if(!target)throw Error('Usage: node scripts/stage-app.mjs /path/to/intel_agent_app')
-const host=path.resolve(target),src=path.resolve('integration/intel-app')
-execFileSync('git',['-C',host,'apply','--check',src+'/host.patch'])
-execFileSync('git',['-C',host,'apply',src+'/host.patch'])
-await cp(src+'/app',host+'/app',{recursive:true})
-await cp('app/server',host+'/app/lib/pipeline',{recursive:true})
-for(const f of ['adapter.ts','types.d.mts','billing.d.mts','store.d.mts'])await cp(src+'/'+f,host+'/app/lib/pipeline/'+f)
-await cp(src+'/worker.mjs',host+'/scripts/pipeline-worker.mjs')
-await mkdir(host+'/public/pipeline-assets',{recursive:true})
-for(const f of ['pipeline.html','pipeline.js'])await cp('dist/'+f,host+'/public/pipeline-assets/'+f)
+import {fileURLToPath} from 'node:url'
+const root=fileURLToPath(new URL('../',import.meta.url)),host=process.argv[2]&&path.resolve(process.argv[2])
+if(!host||host===path.resolve(root))throw Error('Specify the existing shared web service build directory')
+const shared=path.join(root,'integration/shared-web')
+const required=['dist/pipeline.js','dist/pipeline.html','dist/pipeline-renderer.html','dist/pipeline-chatgpt.html','dist/pipeline-embedded.html','dist/pipeline-embedded.js','dist/pipeline-claude.html','dist/pipeline-embedded-claude.html','dist/pipeline-embedded-claude.js','dist/pipeline-mcp.cjs']
+await Promise.all(required.map(f=>access(path.join(root,f))))
+const config=await readFile(path.join(host,'app/lib/oauth-config.ts'),'utf8')
+if(!config.includes('function pipelineResource('))throw Error('Expected the shared web baseline with standalone Pipeline enabled')
+for(const patch of ['pipeline-oauth.patch','pipeline-account.patch']){
+ const apply=(...args)=>execFileSync('git',['-C',host,'apply',...args,path.join(shared,patch)],{stdio:'pipe'})
+ try{apply('--reverse','--check')}catch{apply('--check');apply()}
+}
+await cp(path.join(shared,'app'),path.join(host,'app'),{recursive:true})
+const lib=path.join(host,'app/lib/pipeline');await mkdir(lib,{recursive:true})
+await cp(path.join(root,'app/server'),lib,{recursive:true})
+for(const f of ['adapter.ts','types.d.mts','billing.d.mts','store.d.mts','pipeline-mcp.d.cts'])await cp(path.join(shared,f),path.join(lib,f))
+await cp(path.join(root,'dist/pipeline-mcp.cjs'),path.join(lib,'pipeline-mcp.cjs'))
+await cp(path.join(shared,'worker.mjs'),path.join(host,'scripts/pipeline-worker.mjs'))
+const assets=path.join(host,'public/pipeline-assets');await mkdir(assets,{recursive:true})
+for(const f of required.filter(f=>!f.endsWith('.cjs')))await cp(path.join(root,f),path.join(assets,path.basename(f)))

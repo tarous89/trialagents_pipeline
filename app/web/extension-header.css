@@ -1,0 +1,6 @@
+/* Intel extension header, from combined-workspace.css. */
+.workspace-brand {display:inline-flex;align-items:center;gap:10px;color:#f2f5f3;font:600 17px/28px var(--ta-font-sans);letter-spacing:-.02em;}
+.workspace-brand img {display:block;flex:none;object-fit:contain;}
+.combined-extension-surface .combined-preview-label {padding:6px 10px;border:1px solid #3c5246;border-radius:999px;background:#1b2e23;color:#d8e6dd;font-size:12px;font-weight:400;}
+.combined-extension-surface button.workspace-brand{padding:0;border:0;background:transparent;color:#f2f5f3;cursor:pointer;text-align:left}
+.combined-extension-surface button.workspace-brand:focus-visible{outline:2px solid #fff;outline-offset:5px}

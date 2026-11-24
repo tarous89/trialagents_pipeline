@@ -22,7 +22,6 @@ The standalone file uses its embedded copies. Edits to the separate source files
 | Deliverables | Review received evidence, affected items, dates, responsible people, sign-off and file counts. Filter by responsible person or open a record. |
 | Risks | Review severity, open or closed status and directly affected items. Open a risk to inspect or update its mitigation. |
 | Changes | Review dated changes and their directly affected items. Edit a change to revise individual forecasts. |
-| Digest | Switch between All, Weekly and Monthly, select a program, or open a report from the archive. Program selection narrows the sections displayed. Reports are prepared examples. Editing records does not generate a new digest. |
 | Settings | Save currency, date format, milestone lookahead, deadline reminder lead time and individual email preferences. |
 
 Programs and Timeline share filters when switching directly between them. Search covers names, owners, descriptions and program names. Other filters cover program, owner, record type, status, risk, forecast budget under or at least 50,000, and forecast deadline bounds. Ancestors remain visible when needed to give a matching child context. When controls exceed the first row, **More filters** opens a second row. **Reset** clears filters.

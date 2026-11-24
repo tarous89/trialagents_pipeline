@@ -1,0 +1,19 @@
+{
+  "name": "trialagents-pipeline",
+  "owner": {
+    "name": "Atlas Consulting",
+    "email": "intel@trialagents.com",
+    "url": "https://trialagents.com"
+  },
+  "metadata": {
+    "description": "TrialAgents Pipeline plugin for Claude: biotech programs, milestones and shared workspace views."
+  },
+  "plugins": [
+    {
+      "name": "trialagents-pipeline",
+      "source": "./plugins/claude",
+      "description": "Manage your biotech pipeline from Claude. Track programs, milestones, activities, deliverables and changes in a shared workspace.",
+      "version": "0.2.5"
+    }
+  ]
+}

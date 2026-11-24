@@ -1,0 +1,74 @@
+diff --git a/app/components/ChatGPTConnection.tsx b/app/components/ChatGPTConnection.tsx
+index 2ecf96f..83adc3a 100644
+--- a/app/components/ChatGPTConnection.tsx
++++ b/app/components/ChatGPTConnection.tsx
+@@ -21,7 +21,7 @@ export function ChatGPTConnection({pipeline=false}:{pipeline?:boolean}={}){
+   {error&&!confirm&&<p role="alert">{error}</p>}
+   {error&&!confirm&&<button type="button" className="ta-secondary-button" onClick={()=>void load()}>Retry connection status</button>}
+   {connected&&<button type="button" style={{marginTop:16}} className="ta-secondary-button" onClick={()=>{setError('');setConfirm(true);}}>Disconnect ChatGPT</button>}
+-  {connected===false&&<div style={{marginTop:16,marginBottom:16}}><p style={{margin:0}}>{pipeline?'Add the Pipeline app in ChatGPT using this URL.':'Use TrialAgents in ChatGPT to create in-depth analyses and custom views.'}</p><div style={{marginTop:16}}>{pipeline?<code>https://mcp.trialagents.com/pipeline/mcp</code>:<OpenInChatGPT/>}</div></div>}
++  {connected===false&&<div style={{marginTop:16,marginBottom:16}}><p style={{margin:0}}>{pipeline?'Add the Pipeline app in ChatGPT using this URL.':'Use TrialAgents in ChatGPT to create in-depth analyses and custom views.'}</p><div style={{marginTop:16}}>{pipeline?<code>https://mcp.trialagents.com/pipeline/chatgpt</code>:<OpenInChatGPT/>}</div></div>}
+   <dialog ref={dialog} className={styles.dialog} aria-labelledby={heading} onCancel={event=>{event.preventDefault();if(!busy)setConfirm(false);}}>
+    <h2 id={heading}>Disconnect ChatGPT?</h2>
+    <p>This revokes all ChatGPT connections to this account for {pipeline?'Pipeline':'TrialAgents research'}. Your projects, custom views, subscription and website login stay unchanged.</p>
+diff --git a/app/lib/oauth-config.ts b/app/lib/oauth-config.ts
+index ad366fa..4faf704 100644
+--- a/app/lib/oauth-config.ts
++++ b/app/lib/oauth-config.ts
+@@ -26,5 +26,5 @@ export function oauthClaudeResource() {
+ }
+
+ export function pipelineResource(claude=false){
+- return oauthResource().replace(/\/mcp$/, '')+(claude?'/pipeline-claude/mcp':'/pipeline/mcp');
++ return oauthResource().replace(/\/mcp$/, '')+(claude?'/pipeline/claude':'/pipeline/chatgpt');
+ }
+diff --git a/app/oauth/authorize/route.ts b/app/oauth/authorize/route.ts
+index 88613b0..1b670a2 100644
+--- a/app/oauth/authorize/route.ts
++++ b/app/oauth/authorize/route.ts
+@@ -111,6 +111,10 @@ export async function POST(request: NextRequest) {
+     return response;
+   }
+
++  if(decision==='approve' && [pipelineResource(),pipelineResource(true)].includes(result.resource)){
++    const {runPipeline}=await import('@/app/lib/pipeline/adapter');
++    await runPipeline(user,{op:'home.ensure'},'consent');
++  }
+   const redirect = new URL(result.redirectUri);
+   if (decision === "approve") redirect.searchParams.set("code", code);
+   else redirect.searchParams.set("error", "access_denied");
+@@ -122,7 +126,7 @@ function consentPage(requestId: string, clientName: string, callbackHost: string
+   return html(`
+     <div class="brand"><img src="/trialagents-mark-black.png" width="28" height="28" alt=""><span>TrialAgents</span></div>
+     <h1>${connected?`${escapeHtml(clientName)} connected`:`Connect TrialAgents to ${escapeHtml(clientName)}`}</h1>
+-    <p class="lead">${connected?'Your account is connected. ':''}${isPipeline?'Open and update your permitted Pipeline workspaces using your current team role.':'Save your search results, projects and custom views for later use in TrialAgents.'}</p>
++    <p class="lead">${connected?'Your account is connected. ':''}${isPipeline?'Connect to save and reopen your work in ChatGPT, Claude or the TrialAgents app. All individual workspace features are free. Your workspace role determines what you can change.':'Save your search results, projects and custom views for later use in TrialAgents.'}</p>
+     <p class="identity">Continue as <strong>${escapeHtml(email)}</strong></p>
+     <form method="post" action="/oauth/authorize">
+       <input type="hidden" name="request_id" value="${escapeHtml(requestId)}">
+diff --git a/tests/oauth-journey.test.mjs b/tests/oauth-journey.test.mjs
+index 4eb83cf..641cf6a 100644
+--- a/tests/oauth-journey.test.mjs
++++ b/tests/oauth-journey.test.mjs
+@@ -12,10 +12,11 @@ test('OAuth continuation, account binding and one-use approval', async t => {
+  const params=new URLSearchParams({response_type:'code',client_id:'client',redirect_uri:'https://client.invalid/callback',scope:'mcp:tools',state:'state',code_challenge:'a'.repeat(43),code_challenge_method:'S256',resource:'https://mcp.trialagents.com/mcp'});
+  const f=globalThis.oauthFixture={user:{id:'owner',email:'owner@synthetic.invalid'},record:null,codes:[],cleared:false};
+  const modules={
++ '@/app/lib/pipeline/adapter':`export const runPipeline=async(user,request,source)=>{if(request.op!=='home.ensure'||source!=='consent')throw Error('Wrong provisioning');globalThis.oauthFixture.provisioned=user.id}`,
+  '@/app/lib/oauth-connections':`export const hasChatGPTConnection=async()=>globalThis.oauthFixture.connected===true;export const hasClaudeConnection=async()=>globalThis.oauthFixture.claudeConnected===true;`,
+  'next/server':`export const NextResponse={redirect:(url,status=307)=>new Response(null,{status,headers:{location:String(url)}})};`,
+  '@/app/lib/auth':`export const authenticatedUser=async()=>globalThis.oauthFixture.user; export const opaqueToken=()=>crypto.randomUUID();export const hashToken=x=>'hash-'+x;export const deleteRequestSession=async()=>{globalThis.oauthFixture.user=null};export const clearSessionCookie=()=>{globalThis.oauthFixture.cleared=true};`,
+- '@/app/lib/oauth-config':`export const oauthIssuer=()=> 'https://intel.trialagents.com';export const pipelineResource=(claude=false)=> 'https://mcp.trialagents.com/'+(claude?'pipeline-claude':'pipeline')+'/mcp';export const oauthClaudeResource=()=> 'https://mcp.trialagents.com/claude/mcp';`,
++ '@/app/lib/oauth-config':`export const oauthIssuer=()=> 'https://intel.trialagents.com';export const pipelineResource=(claude=false)=> 'https://mcp.trialagents.com/'+(claude?'pipeline/claude':'pipeline/chatgpt');export const oauthClaudeResource=()=> 'https://mcp.trialagents.com/claude/mcp';`,
+  '@/app/lib/oauth-account-lock':`export const lockResearchOAuthAccount=async()=>{};`,
+  '@/app/lib/oauth-server':`export const registeredClient=async()=>({clientName:'ChatGPT',redirectUris:globalThis.oauthFixture.redirectUris||['https://client.invalid/callback']});`,
+  '@/app/lib/oauth-validation':`export const validAuthorizationRequest=p=>({clientId:p.get('client_id'),redirectUri:p.get('redirect_uri'),state:p.get('state'),codeChallenge:p.get('code_challenge'),resource:p.get('resource'),scope:p.get('scope')});`,
+@@ -55,4 +56,8 @@ test('OAuth continuation, account binding and one-use approval', async t => {
+  f.user={id:'owner',email:'owner@synthetic.invalid'};await get();response=await post(f.record.id,'deny');assert.equal(new URL(response.headers.get('location')).searchParams.get('error'),'access_denied');assert.equal(f.codes.length,1);
+  await get();response=await post(f.record.id,'change');assert.equal(response.status,303);assert.equal(f.cleared,true);assert.equal(f.user,null);assert.equal(new URL(response.headers.get('location')).searchParams.get('return_to'),returnPath);assert.equal(f.codes.length,1);
+  assert.equal((await post('old')).status,401);
++ f.user={id:'pipeline-user',email:'pipeline@example.invalid'};
++ const pipelineUrl=new URL('https://intel.trialagents.com'+returnPath);pipelineUrl.searchParams.set('resource','https://mcp.trialagents.com/pipeline/chatgpt');
++ await api.GET({nextUrl:pipelineUrl});await post(f.record.id,'deny');assert.equal(f.provisioned,undefined);
++ await api.GET({nextUrl:pipelineUrl});await post(f.record.id,'approve');assert.equal(f.provisioned,'pipeline-user');
+ });

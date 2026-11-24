@@ -7,15 +7,35 @@ export function stripeBilling({stripeRequest,stripeMode,priceId}){
     const response=await stripeRequest(path,{method:form?'POST':'GET',headers,body:form?new URLSearchParams(form):undefined})
     check(response.ok,'Billing provider unavailable',503);return response.json()
   }
+  // Stripe lookup keys are account- and mode-specific. Both Checkout and webhook
+  // reconciliation must resolve the same recurring price.
+  async function teamPriceId(mode, createIfMissing = false) {
+    const configured = priceId(mode)
+    if (configured) return configured
+    const lookupKey = 'trialagents_pipeline_team_usd_49_monthly_v1'
+    const prices = await api('/prices?lookup_keys[]=' + lookupKey + '&limit=1')
+    if (prices.data?.[0]?.id) return prices.data[0].id
+    check(createIfMissing, 'Pipeline Team price unavailable', 503)
+    const price = await api('/prices', {
+      lookup_key: lookupKey,
+      currency: 'usd',
+      unit_amount: '4900',
+      'recurring[interval]': 'month',
+      'product_data[name]': 'TrialAgents Pipeline Team',
+    }, lookupKey)
+    check(price.id, 'Pipeline Team price unavailable', 503)
+    return price.id
+  }
   async function checkout(q,w,u,op){
-    const mode=stripeMode(),price=priceId(mode)
-    check(['test','live'].includes(mode)&&price,'Pipeline billing is unavailable',503)
+    const mode=stripeMode()
+    check(['test','live'].includes(mode),'Pipeline billing is unavailable',503)
     check(!w.stripe_mode||w.stripe_mode===mode,'Billing environment mismatch',409)
     if(op==='billing.portal'){
       check(w.customer,'No billing account yet',409)
       return {url:(await api('/billing_portal/sessions',{customer:w.customer,return_url:origin+'/?section=Billing&workspace='+w.id})).url}
     }
     check(!w.subscription||w.suspended||new Date(w.paid_until)<new Date(),'Team is already active',409)
+    const price=await teamPriceId(mode, true)
     const p=await api('/prices/'+encodeURIComponent(price))
     check(p.active&&p.currency==='usd'&&p.unit_amount===4900&&p.recurring?.interval==='month'&&p.recurring?.interval_count===1,'Pipeline Team price must be USD 49 monthly',503)
     let customer=w.customer
@@ -49,13 +69,15 @@ export function stripeBilling({stripeRequest,stripeMode,priceId}){
       check(row&&row.customer===object.customer&&row.stripe_mode===mode,'Billing mapping unavailable',503)
       const seen=await q('INSERT INTO pipeline.stripe_event VALUES($1,$2) ON CONFLICT DO NOTHING RETURNING id',[mode,event.id])
       if(!seen.length)return
-      const price=priceId(mode)
+      const price=await teamPriceId(mode)
       const list=await api('/subscriptions?customer='+encodeURIComponent(row.customer)+'&status=all&limit=100')
       const match=list.data.filter(s=>s.metadata?.pipeline_workspace===w && s.items?.data?.some(i=>i.price?.id===price&&i.quantity===1))
       const current=match.find(s=>s.status==='active')??match[0]
       const expiry=current?.items.data.find(i=>i.price.id===price)?.current_period_end??current?.current_period_end
-      const active=current?.status==='active' && expiry>Date.now()/1000
-      await q('UPDATE pipeline.workspace SET subscription=$2,paid_until=$3,suspended=$4 WHERE id=$1',[w,current?.id??null,expiry?new Date(expiry*1000):null,!active])
+      const prepaid=Boolean(current?.id&&current.id===row.subscription&&!row.suspended&&new Date(row.paid_until)>new Date())
+      const verifiedUntil=current?.status==='active'&&expiry?new Date(expiry*1000):prepaid?row.paid_until:null
+      const active=Boolean(verifiedUntil && new Date(verifiedUntil)>new Date())
+      await q('UPDATE pipeline.workspace SET subscription=$2,paid_until=$3,suspended=$4 WHERE id=$1',[w,current?.id??null,verifiedUntil,!active])
       await q("INSERT INTO pipeline.audit(workspace_id,actor,actor_name,source,action,details) VALUES($1,'stripe','Stripe','system','billing.updated',$2)",[w,JSON.stringify({active:Boolean(active),status:current?.status??'inactive'})])
     })
     return true

@@ -1,0 +1,29 @@
+// This isolated surface receives its display content only from its embedding parent.
+(() => {
+  let channel, interactive=false
+  const controls=()=>[...document.querySelectorAll('input[id],select[id],textarea[id]')]
+  const send=(type,value)=>parent.postMessage({channel,type,value},'*')
+  const value=el=>el.type==='checkbox'?el.checked:el.value
+  const filter=()=>{
+    const term=(document.querySelector('[data-filter]')?.value||'').toLowerCase()
+    for(const row of document.querySelectorAll('[data-filter-value]'))row.hidden=!row.dataset.filterValue.toLowerCase().includes(term)
+  }
+  addEventListener('message',event=>{
+    const data=event.data
+    if(event.source!==parent||channel||data?.type!=='mount'||typeof data.channel!=='string'||typeof data.markup!=='string'||data.markup.length>240000)return
+    channel=data.channel;interactive=data.interactive===true
+    document.body.innerHTML=data.markup
+    const state=data.state||{}
+    for(const el of controls()){
+      if(!interactive)el.disabled=true
+      if(!Object.hasOwn(state,el.id))continue
+      if(el.type==='checkbox')el.checked=state[el.id]===true
+      else el.value=String(state[el.id])
+    }
+    filter();send('height',document.body.scrollHeight)
+  })
+  document.addEventListener('input',()=>{if(interactive){filter();send('draft',Object.fromEntries(controls().map(el=>[el.id,value(el)])))}})
+  document.addEventListener('submit',e=>e.preventDefault(),true)
+  document.addEventListener('click',e=>{if(e.target.closest('a'))e.preventDefault()},true)
+  new ResizeObserver(()=>{if(channel)send('height',document.body.scrollHeight)}).observe(document.body)
+})()
