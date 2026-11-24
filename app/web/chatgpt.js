@@ -73,6 +73,7 @@ window.addEventListener('message',event=>{
 app.ontoolresult=result=>{
  const next=result._meta?.pipeline??result.structuredContent?.result
  if(next?.workspace&&(next.url||next.pending||next.reopen))route(next)
+ else if(next?.workspace)port?.postMessage({type:'refresh',workspace:next.workspace})
 }
 app.onteardown=async()=>{port?.close();frame?.remove();return {}}
 function resize(ctx){

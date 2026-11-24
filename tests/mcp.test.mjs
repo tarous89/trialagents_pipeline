@@ -5,7 +5,7 @@ import {readFile} from 'node:fs/promises'
 import {PGlite} from '@electric-sql/pglite'
 import {PROTOCOL_VERSION_META_KEY,CLIENT_INFO_META_KEY,CLIENT_CAPABILITIES_META_KEY} from '@modelcontextprotocol/server'
 import {pipeline} from '../app/server/store.mjs'
-import {pipelineHttp,protectedResource,resource,metadataPath} from '../mcp/http.mjs'
+import {pipelineHttp,protectedResource,resource,claudeResource,metadataPath} from '../mcp/http.mjs'
 import {widgetUri} from '../mcp/tools.mjs'
 
 test('standalone shared-web MCP authenticates the exact audience and runs the complete tool-to-database path',async t=>{
@@ -104,4 +104,26 @@ test('standalone shared-web MCP authenticates the exact audience and runs the co
    assert.equal((await read({table,search:values.name})).records.length,1)
    if(table==='Change')assert.deepEqual(await seed('Milestone','Site readiness review',['name','start','end']),milestone)
  })
+})
+
+test('Claude uses its own audience and route, the same tools, and is recorded as Claude',async t=>{
+ const db=new PGlite();t.after(()=>db.close());await db.exec(await readFile('app/server/schema.sql','utf8'))
+ const store=pipeline({transaction:fn=>db.transaction(tx=>fn(async(s,p)=>(await tx.query(s,p)).rows))})
+ const user={id:'fictional-claude',email:'claude-user@example.invalid'}
+ const {workspace}=await store(user,{op:'home.ensure'},'consent')
+ const sources=[]
+ const serve=pipelineHttp({audience:claudeResource,authorize:(token,aud)=>token==='member'&&aud===claudeResource?user:null,
+   run:(u,r,source)=>{sources.push(source);return store(u,r,source)},readWidget:()=>readFile('dist/pipeline-chatgpt.html','utf8')})
+ const post=(url,method,params,token='member')=>serve(new Request(url,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json',accept:'application/json, text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})}))
+ assert.equal((await post(resource,'tools/list',{})).status,404)
+ const unauth=await post(claudeResource,'tools/list',{},'other');assert.equal(unauth.status,401)
+ assert.ok(unauth.headers.get('www-authenticate').includes('https://mcp.trialagents.com/.well-known/oauth-protected-resource/pipeline/claude'))
+ assert.equal((await protectedResource(undefined,claudeResource).json()).resource,claudeResource)
+ const rpc=async(method,params)=>{const raw=await (await post(claudeResource,method,params)).text()
+   const json=JSON.parse(raw.startsWith('{')?raw:raw.split('\n').find(l=>l.startsWith('data: ')).slice(6));assert.ifError(json.error);return json.result}
+ const {tools}=await rpc('tools/list',{})
+ assert.ok(['open_pipeline','read_pipeline','read_pipeline_followup','read_active_pipeline_selection','create_pipeline_view','update_pipeline_view'].every(n=>tools.some(tool=>tool.name===n)))
+ const read=await rpc('tools/call',{name:'read_pipeline',arguments:{workspace}})
+ assert.ok(!read.isError,JSON.stringify(read.content))
+ assert.ok(sources.length&&sources.every(s=>s==='Claude'))
 })

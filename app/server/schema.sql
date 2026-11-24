@@ -98,3 +98,12 @@ CREATE TABLE IF NOT EXISTS pipeline.frame_access (
  access_digest text NOT NULL, expires_at timestamptz NOT NULL
 );
 CREATE INDEX IF NOT EXISTS pipeline_frame_expiry ON pipeline.frame_access(expires_at);
+
+CREATE OR REPLACE FUNCTION pipeline.notify_workspace_change() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  PERFORM pg_notify('pipeline_change_' || replace(NEW.id::text,'-',''), '');
+  RETURN NEW;
+END $$;
+CREATE OR REPLACE TRIGGER pipeline_workspace_change
+AFTER UPDATE OF revision, paid_until, suspended ON pipeline.workspace
+FOR EACH ROW EXECUTE FUNCTION pipeline.notify_workspace_change();

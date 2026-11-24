@@ -20,7 +20,7 @@ index ad366fa..4faf704 100644
 
  export function pipelineResource(claude=false){
 - return oauthResource().replace(/\/mcp$/, '')+(claude?'/pipeline-claude/mcp':'/pipeline/mcp');
-+ return oauthResource().replace(/\/mcp$/, '')+(claude?'/pipeline-claude/mcp':'/pipeline/chatgpt');
++ return oauthResource().replace(/\/mcp$/, '')+(claude?'/pipeline/claude':'/pipeline/chatgpt');
  }
 diff --git a/app/oauth/authorize/route.ts b/app/oauth/authorize/route.ts
 index 88613b0..1b670a2 100644
@@ -30,7 +30,7 @@ index 88613b0..1b670a2 100644
      return response;
    }
 
-+  if(decision==='approve' && result.resource===pipelineResource()){
++  if(decision==='approve' && [pipelineResource(),pipelineResource(true)].includes(result.resource)){
 +    const {runPipeline}=await import('@/app/lib/pipeline/adapter');
 +    await runPipeline(user,{op:'home.ensure'},'consent');
 +  }
@@ -42,7 +42,7 @@ index 88613b0..1b670a2 100644
      <div class="brand"><img src="/trialagents-mark-black.png" width="28" height="28" alt=""><span>TrialAgents</span></div>
      <h1>${connected?`${escapeHtml(clientName)} connected`:`Connect TrialAgents to ${escapeHtml(clientName)}`}</h1>
 -    <p class="lead">${connected?'Your account is connected. ':''}${isPipeline?'Open and update your permitted Pipeline workspaces using your current team role.':'Save your search results, projects and custom views for later use in TrialAgents.'}</p>
-+    <p class="lead">${connected?'Your account is connected. ':''}${isPipeline?'Connect to save and reopen your work in ChatGPT or the TrialAgents app. All individual workspace features are free. Your workspace role determines what you can change.':'Save your search results, projects and custom views for later use in TrialAgents.'}</p>
++    <p class="lead">${connected?'Your account is connected. ':''}${isPipeline?'Connect to save and reopen your work in ChatGPT, Claude or the TrialAgents app. All individual workspace features are free. Your workspace role determines what you can change.':'Save your search results, projects and custom views for later use in TrialAgents.'}</p>
      <p class="identity">Continue as <strong>${escapeHtml(email)}</strong></p>
      <form method="post" action="/oauth/authorize">
        <input type="hidden" name="request_id" value="${escapeHtml(requestId)}">
@@ -59,7 +59,7 @@ index 4eb83cf..641cf6a 100644
   'next/server':`export const NextResponse={redirect:(url,status=307)=>new Response(null,{status,headers:{location:String(url)}})};`,
   '@/app/lib/auth':`export const authenticatedUser=async()=>globalThis.oauthFixture.user; export const opaqueToken=()=>crypto.randomUUID();export const hashToken=x=>'hash-'+x;export const deleteRequestSession=async()=>{globalThis.oauthFixture.user=null};export const clearSessionCookie=()=>{globalThis.oauthFixture.cleared=true};`,
 - '@/app/lib/oauth-config':`export const oauthIssuer=()=> 'https://intel.trialagents.com';export const pipelineResource=(claude=false)=> 'https://mcp.trialagents.com/'+(claude?'pipeline-claude':'pipeline')+'/mcp';export const oauthClaudeResource=()=> 'https://mcp.trialagents.com/claude/mcp';`,
-+ '@/app/lib/oauth-config':`export const oauthIssuer=()=> 'https://intel.trialagents.com';export const pipelineResource=(claude=false)=> 'https://mcp.trialagents.com/'+(claude?'pipeline-claude/mcp':'pipeline/chatgpt');export const oauthClaudeResource=()=> 'https://mcp.trialagents.com/claude/mcp';`,
++ '@/app/lib/oauth-config':`export const oauthIssuer=()=> 'https://intel.trialagents.com';export const pipelineResource=(claude=false)=> 'https://mcp.trialagents.com/'+(claude?'pipeline/claude':'pipeline/chatgpt');export const oauthClaudeResource=()=> 'https://mcp.trialagents.com/claude/mcp';`,
   '@/app/lib/oauth-account-lock':`export const lockResearchOAuthAccount=async()=>{};`,
   '@/app/lib/oauth-server':`export const registeredClient=async()=>({clientName:'ChatGPT',redirectUris:globalThis.oauthFixture.redirectUris||['https://client.invalid/callback']});`,
   '@/app/lib/oauth-validation':`export const validAuthorizationRequest=p=>({clientId:p.get('client_id'),redirectUri:p.get('redirect_uri'),state:p.get('state'),codeChallenge:p.get('code_challenge'),resource:p.get('resource'),scope:p.get('scope')});`,

@@ -2,8 +2,9 @@ window.pipelineLink=async url=>{
  const parsed=new URL(url);if(parsed.protocol!=='https:'||!['pipeline.trialagents.com','checkout.stripe.com','billing.stripe.com'].includes(parsed.hostname))throw Error('Invalid destination');
  location.assign(url);
 };
-window.pipelineTransport=async request=>{
- const res=await fetch('/api/pipeline',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'same-origin',cache:'no-store',body:JSON.stringify(request)});
+window.pipelineTransport=async (request,signal)=>{
+ const res=await fetch('/api/pipeline',{method:'POST',signal,headers:{'Content-Type':'application/json'},credentials:'same-origin',cache:'no-store',body:JSON.stringify(request)});
+ if(request.op==='workspace.events')return res
  const body=await res.json();
  if(!res.ok){const e=new Error(body.error||'Request failed');e.status=res.status;throw e}
  return body;

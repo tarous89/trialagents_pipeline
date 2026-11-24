@@ -96,6 +96,7 @@ export async function invoke(name,args,run,context){
        const url=link(data.workspace,{tab:'Overview',...table&&{table},...record&&{record}})
        return reply({...data,url},true,context,{workspace:data.workspace,url})
      }
+     if(request.op.startsWith('assistant.row.'))return reply({...data,workspace})
      return reply(data,spec.show,context)
    }
    let receipt

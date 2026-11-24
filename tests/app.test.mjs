@@ -33,27 +33,27 @@ test('invites require payment, are email-bound, delivered once, and roles apply 
    let token;await deliverMail(db,async job=>{token=job.message.match(/invite=([\w-]+)/)[1]})
    await assert.rejects(run(owner,req('team.accept',{token})),{status:403})
    assert.equal((await run(u,req('team.accept',{token}))).workspace,w)
-   assert.equal((await run(u,req('bootstrap'))).role,role)
+   const joined=await run(u,req('bootstrap'));assert.equal(joined.role,role);version=joined.revision
  }
  await assert.rejects(run(reader,req('items.save',{remove:['study']})),{status:403})
  await assert.rejects(run(reader,req('examples.remove',{scope:'Program'})),{status:403})
  await assert.rejects(run(editor,req('design.save',{})),{status:403})
  await run(reader,req('preferences.save',{deadline:false}))
  await assert.rejects(run(editor,req('view.save',{title:'Manual',filters:{}})),{status:403})
- const view=await run(editor,req('view.save',{title:'Programs',filters:{type:'Program'}}),'Claude');version=view.revision
+ const view=await run(editor,req('assistant.view.create',{title:'Programs',query:{table:'Program'},renderer:'live'}),'Claude');version=view.revision
  const d=await run(owner,req('design.save',{title:'Portfolio',tabs:[{id:randomUUID(),view:view.id,label:'Programs report'}],accent:'#226644'}));version=d.revision
  await assert.rejects(run(editor,req('view.remove',{id:view.id})),{status:409})
  await assert.rejects(run(reader,req('view.remove',{id:view.id,version:1,removePins:true})),{status:403})
  await assert.rejects(run(editor,req('view.remove',{id:view.id,version:1,removePins:true})),{status:409})
- const revised=await run(editor,req('view.save',{id:view.id,title:'Revised',filters:{type:'Program'}}),'Claude');version=revised.revision
+ const revised=await run(editor,req('assistant.view.update',{id:view.id,version:1,title:'Revised',query:{table:'Program'},renderer:'live'}),'Claude');version=revised.revision
  await assert.rejects(run(owner,req('view.remove',{id:view.id,version:1,removePins:true})),{status:409})
  assert.equal((await run(owner,req('bootstrap'))).views[0].title,'Revised')
  const removal=req('view.remove',{id:view.id,version:2,removePins:true},{revision:0})
  version=(await run(owner,removal)).revision
  assert.equal((await run(owner,removal)).revision,version)
  const after=await run(owner,req('bootstrap'));assert.equal(after.views.length,0);assert.equal(after.tabs.length,0)
- await run(owner,req('team.member',{user:editor.id,role:'reader'}))
- await assert.rejects(run(editor,req('view.save',{title:'New',filters:{}}),'Claude'),{status:403})
+ version=(await run(owner,req('team.member',{user:editor.id,role:'reader'}))).revision
+ await assert.rejects(run(editor,req('assistant.view.create',{title:'New',query:{table:'Program'},renderer:'live'}),'Claude'),{status:403})
 })
 test('subscription replay, expiry and renewal preserve membership',async()=>{
  await pg.query("UPDATE pipeline.workspace SET stripe_mode='test',customer='cus_local' WHERE id=$1",[w])
@@ -83,11 +83,11 @@ test('membership and bootstrap query counts remain constant at 20 and 200 visibl
   const matches=await measured(user,{workspace:ws,op:'records.read',input:{type:'Program',id:'r10',limit:1}})
   assert.equal(matches.total,1);assert.equal(matches.records[0].id,'r10')
  }
- assert.deepEqual(counts,[4,4])
+ assert.deepEqual(counts,[5,5])
 })
 test('rich views load on demand and belong to their workspace',async()=>{
  const doc='<figure><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="8"/></svg><figcaption>Program review</figcaption></figure>'
- const saved=await run(owner,req('view.save',{title:'Portfolio review',filters:{},presentation:doc}),'Claude');version=saved.revision
+ const saved=await run(owner,req('assistant.view.create',{title:'Portfolio review',query:{table:'Program'},renderer:'static',presentation:doc}),'Claude');version=saved.revision
  const snap=await run(owner,req('bootstrap'));const summary=snap.views.find(v=>v.id===saved.id)
  assert.equal(summary.rich,true);assert.equal(summary.presentation,undefined)
  assert.equal((await run(reader,req('view.read',{id:saved.id}))).presentation,doc)
@@ -170,4 +170,22 @@ test('new homes get one linked, removable example of each type without sending m
  const cleanup=await run(emptyUser,{...write('examples.remove',{scope:'Program'},imported.revision),workspace:home.workspace})
  assert.equal(cleanup.removed,0)
  assert.equal((await run(emptyUser,{op:'bootstrap'})).items[0].id,'imported')
+})
+
+test('assignments distinguish members with the same name and preserve external owners',async()=>{
+ const user={id:'pick-owner',email:'pick@example.org'},ws=(await run(user,{op:'bootstrap'})).workspace
+ await pg.query("UPDATE pipeline.workspace SET paid_until=now()+interval '1 month' WHERE id=$1",[ws])
+ for(const id of ['alex-a','alex-b'])await pg.query("INSERT INTO pipeline.member(workspace_id,user_id,email,display_name,role) VALUES($1,$2,$3,'Alex','editor')",[ws,id,id+'@example.org'])
+ const snap=await run({id:'alex-a',email:'alex-a@example.org'},{op:'bootstrap',workspace:ws})
+ assert.deepEqual(snap.assignableMembers.filter(m=>m.name==='Alex').map(m=>m.id),['alex-a','alex-b'])
+ assert.deepEqual(await run(user,{op:'bootstrap',workspace:ws,input:{knownRevision:snap.revision,knownRole:'owner',knownTeam:true}}),{revision:snap.revision})
+ const item={...prog,id:'assigned',owner:'Alex',ownerId:'alex-b'}
+ const save=async(record,revision)=>run(user,{op:'items.save',workspace:ws,revision,requestId:randomUUID(),input:{upsert:[record]}})
+ await assert.rejects(save({...item,ownerId:'someone-else'},0),/current workspace member/)
+ await save(item,0)
+ const mail=await pg.query("SELECT recipient FROM pipeline.mail WHERE workspace_id=$1 AND category='assignment'",[ws])
+ assert.deepEqual(mail.rows,[{recipient:'alex-b@example.org'}])
+ await save({...item,ownerId:null},1)
+ const external=(await run(user,{op:'bootstrap',workspace:ws})).items.find(r=>r.id===item.id)
+ assert.equal(external.owner,'Alex');assert.equal(external.ownerId,null)
 })

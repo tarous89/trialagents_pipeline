@@ -1,4 +1,6 @@
-"""Route Pipeline's two public paths to the shared web process in Frankfurt."""
+"""Route Pipeline's public ChatGPT and Claude paths to the shared web process in Frankfurt."""
+from http.cookiejar import CookieJar, DefaultCookiePolicy
+
 import httpx
 from starlette.requests import Request
 from starlette.responses import Response, StreamingResponse
@@ -6,6 +8,10 @@ from starlette.responses import Response, StreamingResponse
 
 RESOURCE = "/pipeline/chatgpt"
 DISCOVERY = "/.well-known/oauth-protected-resource/pipeline/chatgpt"
+CLAUDE_RESOURCE = "/pipeline/claude"
+CLAUDE_DISCOVERY = "/.well-known/oauth-protected-resource/pipeline/claude"
+RESOURCES = {RESOURCE, CLAUDE_RESOURCE}
+DISCOVERIES = {DISCOVERY, CLAUDE_DISCOVERY}
 UPSTREAM = "http://intel-agent-app:10000"
 REQUEST_HEADERS = {
     "accept", "authorization", "content-type", "mcp-protocol-version",
@@ -17,11 +23,22 @@ RESPONSE_HEADERS = {
 }
 
 
+class _NoCookies(DefaultCookiePolicy):
+    """The shared upstream client serves every user, so it must never keep or replay cookies."""
+
+    def set_ok(self, cookie, request):
+        return False
+
+    def return_ok(self, cookie, request):
+        return False
+
+
 class PipelineIngress:
     def __init__(self, app, *, transport=None):
         self.app = app
         self.client = httpx.AsyncClient(
             base_url=UPSTREAM, transport=transport, trust_env=False,
+            cookies=CookieJar(policy=_NoCookies()),
             timeout=httpx.Timeout(60, connect=5), follow_redirects=False,
         )
 
@@ -32,9 +49,9 @@ class PipelineIngress:
             finally:
                 await self.client.aclose()
             return
-        if scope["type"] != "http" or scope["path"] not in {RESOURCE, DISCOVERY}:
+        if scope["type"] != "http" or scope["path"] not in RESOURCES | DISCOVERIES:
             return await self.app(scope, receive, send)
-        allowed = ("GET", "HEAD") if scope["path"] == DISCOVERY else ("POST", "GET", "DELETE")
+        allowed = ("GET", "HEAD") if scope["path"] in DISCOVERIES else ("POST", "GET", "DELETE")
         if scope["method"] not in allowed:
             return await Response(status_code=405, headers={"Allow": ", ".join(allowed)})(scope, receive, send)
         request = Request(scope, receive)

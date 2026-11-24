@@ -3,7 +3,11 @@ import {Server,createMcpHandler} from '@modelcontextprotocol/server'
 import {instructions,invoke,toolList,widgetUri} from './tools.mjs'
 
 export const resource='https://mcp.trialagents.com/pipeline/chatgpt'
+export const claudeResource='https://mcp.trialagents.com/pipeline/claude'
 export const metadataPath='/.well-known/oauth-protected-resource/pipeline/chatgpt'
+// Each assistant has its own OAuth audience and route. Both run the same tools and store.
+const assistantFor=audience=>new URL(audience).pathname==='/pipeline/claude'?'Claude':'ChatGPT'
+const discoveryPath=audience=>'/.well-known/oauth-protected-resource'+new URL(audience).pathname
 const origin='https://pipeline.trialagents.com'
 const mime='text/html;profile=mcp-app'
 const resourceMeta={'openai/ui':{availableDisplayModes:['inline','fullscreen'],preferredDisplayMode:'fullscreen'},ui:{domain:origin,csp:{connectDomains:[],resourceDomains:[],frameDomains:[origin]}},'openai/widgetDomain':origin,'openai/widgetCSP':{connect_domains:[],resource_domains:[],frame_domains:[origin],redirect_domains:[origin]}}
@@ -12,11 +16,12 @@ export function protectedResource(issuer='https://intel.trialagents.com/oauth/in
 }
 export function pipelineHttp({authorize,run,readWidget,selection,audience=resource}){
  return async request=>{
-   if(new URL(request.url).pathname!=='/pipeline/chatgpt')return new Response(null,{status:404})
+   const assistant=assistantFor(audience)
+   if(new URL(request.url).pathname!==new URL(audience).pathname)return new Response(null,{status:404})
    const token=/^Bearer (\S+)$/i.exec(request.headers.get('authorization')??'')?.[1]
    let user
    try{if(token)user=await authorize(token,audience)}catch{return Response.json({error:'Authorization temporarily unavailable'},{status:503})}
-   if(!user)return Response.json({error:'Connect Pipeline'},{status:401,headers:{'WWW-Authenticate':'Bearer resource_metadata="'+new URL(metadataPath,audience).href+'", scope="mcp:tools"','Cache-Control':'no-store'}})
+   if(!user)return Response.json({error:'Connect Pipeline'},{status:401,headers:{'WWW-Authenticate':'Bearer resource_metadata="'+new URL(discoveryPath(audience),audience).href+'", scope="mcp:tools"','Cache-Control':'no-store'}})
    const handler=createMcpHandler(()=>{
      const server=new Server({name:'TrialAgents Pipeline',version:'0.2.5'},{capabilities:{tools:{},resources:{}},instructions})
      server.setRequestHandler('tools/list',()=>({tools:toolList}))
@@ -26,10 +31,10 @@ export function pipelineHttp({authorize,run,readWidget,selection,audience=resour
        const context=createHmac('sha256',token).update(JSON.stringify(['pipeline-presentation-v1',user.id,typeof session==='string'?session:null])).digest('base64url').slice(0,24)
        const sign=(workspace,id)=>createHmac('sha256',token).update(JSON.stringify(['pipeline-panel-v1',context,workspace,id])).digest('base64url').slice(0,22)
        const operation=async(r,surface)=>{
-         if(r.op!=='selection.read')return run(user,r,surface==='workspace'?'ChatGPT workspace':'ChatGPT')
+         if(r.op!=='selection.read')return run(user,r,surface==='workspace'?assistant+' workspace':assistant)
          const [id,signature]=r.input.instance.split('.')
          if(!selection||signature!==sign(r.workspace,id))throw Object.assign(Error('This panel is unavailable in this conversation.'),{status:409})
-         await run(user,{op:'assistant.design',workspace:r.workspace},'ChatGPT')
+         await run(user,{op:'assistant.design',workspace:r.workspace},assistant)
          return selection.ask([user.id,r.workspace,r.input.instance])
        }
        return invoke(params.name,params.arguments??{},operation,context).then(reply=>{

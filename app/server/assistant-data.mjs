@@ -133,6 +133,7 @@ export async function changeRow(q,m,user,source,action,{table,id,values={}},save
     check(k!=='type','The built-in record type is fixed')
     validateValue(d,v)
     if(!d.protected||k==='description')checkBusinessText(v)
+    if(k==='owner'&&v!==record.owner)delete record.ownerId
     if(d.protected&&builtin(table))record[k]=v
     else extras[k]=v
   }
