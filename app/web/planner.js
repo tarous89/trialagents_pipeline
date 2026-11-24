@@ -94,7 +94,6 @@ function sidebar(){
  const email=state.user.email||'', words=(state.user.name||email.split('@')[0]||'?').trim().split(/\s+/u);
  const initials=[words[0],...(words.length>1?[words.at(-1)]:[])].map(w=>Array.from(w)[0]).join('').toUpperCase();
  return '<nav class="rail-nav" aria-label="Workspace tabs">'+keys.map(railButton).join('')+'</nav>'+railButton('Settings')+
-   (window.pipelineChatGPT?'<button type="button" data-share-context aria-label="Share current view" title="Share current view">'+icon('Developments')+'<span>Share current view</span></button>':'')+
    '<div class="sidebar-identity" title="'+E(email)+'"><span class="account-initials" aria-hidden="true">'+E(initials)+'</span><small>'+E(email)+'</small></div>';
 }
 function render(){

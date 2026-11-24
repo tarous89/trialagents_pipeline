@@ -9,7 +9,7 @@ async function tool(name,args){
  return reply._meta?.pipeline??reply.structuredContent?.result
 }
 const selectionRequests=new Map()
-app.onlisttools=async()=>({tools:[{name:'read_current_pipeline_view',description:'Read the saved selection in this open workspace only when the user asks what they are viewing.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true}}]})
+app.onlisttools=async()=>({tools:[{name:'read_current_pipeline_view',description:'Read the saved selection in this open workspace when the user’s request needs the current view or selected record.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true}}]})
 app.oncalltool=async({name})=>{
  if(name!=='read_current_pipeline_view'||!frame||!port)return {isError:true,content:[{type:'text',text:'No active Pipeline workspace.'}]}
  const id=crypto.randomUUID(),channel=port
@@ -17,7 +17,7 @@ app.oncalltool=async({name})=>{
    const timer=setTimeout(()=>finish(null),5000)
    function finish(context){
      clearTimeout(timer);selectionRequests.delete(id)
-     resolve(context&&channel===port?{content:[{type:'text',text:JSON.stringify(context)}]}:{isError:true,content:[{type:'text',text:'Current selection unavailable. Use Share current view in the workspace.'}]})
+     resolve(context&&channel===port?{content:[{type:'text',text:JSON.stringify(context)}]}:{isError:true,content:[{type:'text',text:'The active workspace selection is unavailable. Do not infer a selection from earlier messages.'}]})
    }
    selectionRequests.set(id,finish);channel.postMessage({type:'read-context',id})
  })
@@ -45,7 +45,7 @@ function route(next){
  status.hidden=true;document.body.append(frame)
 }
 function sendTarget(){
- if(port&&target)port.postMessage({type:'target',workspace:target.workspace,url:target.url})
+ if(port&&target)port.postMessage({type:'target',workspace:target.workspace,url:target.url,instance:target.panel_instance})
 }
 window.addEventListener('message',event=>{
  if(event.origin!==origin||!frame||event.source!==frame.contentWindow||event.data?.type!=='pipeline-ready'||!event.ports[0])return
@@ -70,7 +70,10 @@ window.addEventListener('message',event=>{
  }
  sendTarget()
 })
-app.ontoolresult=result=>{if(result._meta?.pipeline)route(result._meta.pipeline)}
+app.ontoolresult=result=>{
+ const next=result._meta?.pipeline??result.structuredContent?.result
+ if(next?.workspace&&(next.url||next.pending||next.reopen))route(next)
+}
 app.onteardown=async()=>{port?.close();frame?.remove();return {}}
 function resize(ctx){
  const d=ctx?.containerDimensions

@@ -113,14 +113,14 @@ export function pipeline(db,{origin='https://pipeline.trialagents.com',billing}=
       else if(!memberOps.has(op)&&!assistantReads.has(op))check(m.role!=='reader','Read-only workspace access',403)
       if(!write){
         switch(op){
-          case 'assistant.workspaces':return {workspaces:(await q('SELECT w.id,w.title,w.owner_id,m.role,w.paid_until,w.suspended FROM pipeline.workspace w JOIN pipeline.member m ON m.workspace_id=w.id WHERE m.user_id=$1 ORDER BY w.id',[user.id])).filter(row=>row.role==='owner'||paid(row)).map(row=>({id:row.id,title:assistantTitle(row,user),role:row.role}))}
+          case 'assistant.workspaces':return {workspace:w,workspaces:(await q('SELECT w.id,w.title,w.owner_id,m.role,w.paid_until,w.suspended FROM pipeline.workspace w JOIN pipeline.member m ON m.workspace_id=w.id WHERE m.user_id=$1 ORDER BY w.id',[user.id])).filter(row=>row.role==='owner'||paid(row)).map(row=>({id:row.id,title:assistantTitle(row,user),role:row.role}))}
           case 'assistant.read':return readRows(q,m,input)
           case 'assistant.schema':return definitions(m,input.table,input.archived,input.knownRevision)
           case 'assistant.impact':return impact(q,m,input.id)
           case 'assistant.views':return listViews(q,m,input)
           case 'assistant.view':return readView(q,m,input)
           case 'assistant.prepare':return prepareView(q,m,input)
-          case 'assistant.design':return {title:assistantTitle(m,user),tabs:m.tabs,accent:m.accent,revision:m.revision}
+          case 'assistant.design':return {workspace:w,title:assistantTitle(m,user),tabs:m.tabs,accent:m.accent,revision:m.revision}
           case 'assistant.open':{
             const tab=['Updates','Digest'].includes(input.tab)?'Overview':input.tab||'Overview'
             const base={workspace:w,role:m.role,revision:m.revision,tab,accent:m.accent,canInvite:m.role==='owner'&&Boolean(paid(m)),title:assistantTitle(m,user),tabs:m.tabs}
@@ -177,7 +177,8 @@ export function pipeline(db,{origin='https://pipeline.trialagents.com',billing}=
       const previous=await one(q,'SELECT digest,result FROM pipeline.receipt WHERE workspace_id=$1 AND actor=$2 AND key=$3',[w,user.id,request.requestId])
       if(previous){check(previous.digest===fingerprint,'Request ID already used',409);return previous.result}
       const versioned=assistantWrites.has(op)||['examples.remove','items.save','design.save','settings.save','view.save','view.remove'].includes(op)
-      if(versioned)check(request.revision===m.revision,'Workspace changed. Reload before saving.',409)
+      const viewScoped=op==='view.remove'&&input.version!==undefined
+      if(versioned&&!viewScoped)check(request.revision===m.revision,'Workspace changed. Reload before saving.',409)
       let result={}
       if(assistantWrites.has(op)){
         if(schemaOps.has(op))result=await changeDefinition(q,m,op,input)
@@ -209,13 +210,22 @@ export function pipeline(db,{origin='https://pipeline.trialagents.com',billing}=
           const value=filters(input.filters);const chart=input.chart||'';check(['','status','type','owner'].includes(chart),'Invalid chart grouping')
           const presentation=input.presentation??old?.presentation??''
           check(typeof presentation==='string'&&Buffer.byteLength(presentation)<=200_000,'Custom view exceeds 200 KB')
-          await q('INSERT INTO pipeline.view(workspace_id,id,author,author_name,title,filters,chart,presentation) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(workspace_id,id) DO UPDATE SET title=excluded.title, filters=excluded.filters, chart=excluded.chart,presentation=excluded.presentation',[w,id,user.id,person(user),input.title,json(value),chart,presentation])
+          await q('INSERT INTO pipeline.view(workspace_id,id,author,author_name,title,filters,chart,presentation) VALUES($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT(workspace_id,id) DO UPDATE SET title=excluded.title, filters=excluded.filters, chart=excluded.chart,presentation=excluded.presentation,version=pipeline.view.version+1',[w,id,user.id,person(user),input.title,json(value),chart,presentation])
           await audit(q,w,user,source,op,id,{title:input.title,filters:value});result={id};break
         }
         case 'view.remove':{
-          check(uuid(input.id),'Invalid view');check(!m.tabs.some(t=>t.view===input.id),'Remove this navigation tab first',409)
-          const old=await one(q,"DELETE FROM pipeline.view WHERE workspace_id=$1 AND id=$2 AND (author=$3 OR $4='owner') RETURNING title",[w,input.id,user.id,m.role])
-          check(old,'View unavailable',403);await audit(q,w,user,source,op,input.id,old);break
+          check(uuid(input.id),'Invalid view')
+          const view=await one(q,'SELECT title,version,author FROM pipeline.view WHERE workspace_id=$1 AND id=$2 FOR UPDATE',[w,input.id])
+          check(view,'This view has already been removed.',404)
+          check(view.author===user.id||m.role==='owner','Only the author or workspace owner can remove this view.',403)
+          if(viewScoped)check(Number.isSafeInteger(input.version)&&view.version===input.version,'This view changed. Review its latest version before removing it.',409)
+          const pins=m.tabs.filter(t=>t.view===input.id)
+          if(pins.length){
+            check(m.role==='owner'&&input.removePins===true,'This view is pinned. The workspace owner must confirm removal of its navigation tab.',409)
+            await q('UPDATE pipeline.workspace SET tabs=$2 WHERE id=$1',[w,json(m.tabs.filter(t=>t.view!==input.id))])
+          }
+          await q('DELETE FROM pipeline.view WHERE workspace_id=$1 AND id=$2',[w,input.id])
+          await audit(q,w,user,source,op,input.id,{title:view.title,pins:pins.map(t=>t.id)});break
         }
         case 'design.save':{
           check(title(input.title)&&/^#[0-9a-f]{6}$/i.test(input.accent)&&Array.isArray(input.tabs),'Invalid design')

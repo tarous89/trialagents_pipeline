@@ -3,6 +3,6 @@ name: manage-pipeline
 description: Work with biotech programs, milestones, decisions and shared views in a connected TrialAgents Pipeline workspace.
 ---
 
-On the first supported Pipeline answer, call `open_pipeline` once. Use its query for a read, Overview for status, or the saved record after a write. Carry the destination through sign-in or clarification. A verified view save already displays the workspace. Later replies may use text, a link or the workspace.
+On the first supported request, display the workspace in the same reply. Use `read_pipeline` for status or records, `open_pipeline` for a destination, or a verified custom-view save. Each presents the workspace once. Carry the destination through sign-in or clarification. Use the returned `workspace_context` for later operations and `read_pipeline_followup` for text-only reads. Reopen when useful.
 
-For a requested custom view, prepare, create (or update the selected ID), and verify the save before confirming. Reuse the request ID on retry. When asked what the user is viewing, use the active component’s `read_current_pipeline_view` tool if available. Otherwise ask the user to click **Share current view**. Resolve ambiguous targets before writes.
+Resolve ambiguous targets before writes. For a custom view, prepare, create or update the selected ID, and verify the save. Reuse its request ID on retry. When the request depends on the current screen, call `read_active_pipeline_selection` with the workspace’s `panel_instance` as `instance`. If the selection is unavailable, ask which view or record the user means.

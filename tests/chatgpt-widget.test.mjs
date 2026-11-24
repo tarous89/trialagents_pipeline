@@ -7,7 +7,8 @@ import headless from '@sparticuz/chromium'
 import {PGlite} from '@electric-sql/pglite'
 import {createHash} from 'node:crypto'
 import {serveFrame} from '../app/server/frame.mjs'
-import {resource} from '../mcp/http.mjs'
+import {selectionRelay} from '../app/server/selection.mjs'
+import {pipelineHttp,resource} from '../mcp/http.mjs'
 import {pipeline} from '../app/server/store.mjs'
 import {invoke,toolList} from '../mcp/tools.mjs'
 
@@ -26,7 +27,24 @@ test('the connected workspace uses the standalone layout, edits records, links t
  const server=(request,surface)=>run(user,request,surface==='workspace'?'ChatGPT workspace':'ChatGPT')
  const saved=await invoke('create_pipeline_view',{workspace,revision:0,request_id:crypto.randomUUID(),view:{title:'Committee review',query:{table:'Program'},renderer:'interactive',presentation:'<label>Committee <input id="committee" data-filter></label><p data-filter-value="Alpha">Alpha</p><p data-filter-value="Beta">Beta</p>'}},server)
  const id=saved._meta.pipeline.view.id
- const open=await invoke('open_pipeline',{workspace},server)
+ const selection=selectionRelay({
+   listen:async(channel,callback)=>({unlisten:await db.listen(channel,callback)}),
+   publish:(channel,payload)=>db.query('SELECT pg_notify($1,$2)',[channel,payload])
+ })
+ const serve=pipelineHttp({authorize:async()=>user,run,selection,readWidget:()=>readFile('dist/pipeline-chatgpt.html','utf8')})
+ async function assistant(name,args,session='this chat'){
+   const response=await serve(new Request(resource,{method:'POST',headers:{authorization:'Bearer member','content-type':'application/json',accept:'application/json, text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:args,_meta:{'openai/session':session}}})}))
+   const raw=await response.text();return JSON.parse(raw.startsWith('{')?raw:raw.split('\n').find(l=>l.startsWith('data: ')).slice(6)).result
+ }
+ const initial=await assistant('read_pipeline',{workspace,query:{table:'Program',fields:['name','status']}})
+ assert.equal(initial.structuredContent.result.records[0].values.status,'In progress')
+ const descriptor=toolList.find(tool=>tool.name==='read_pipeline')
+ assert.ok(descriptor._meta.ui.resourceUri)
+ assert.equal(descriptor._meta['openai/ui'].preferredModelDisplayMode,'fullscreen')
+ assert.ok(initial.structuredContent.result.panel_instance)
+ // Exercise hosts which deliver structuredContent without the optional private envelope.
+ const {structuredContent}=initial
+ const open={content:initial.content,structuredContent}
  const source=await build({stdin:{resolveDir:process.cwd(),contents:`
  import {AppBridge,PostMessageTransport} from '@modelcontextprotocol/ext-apps/app-bridge';
  const iframe=document.querySelector('iframe'),bridge=new AppBridge(null,{name:'test',version:'1'},{serverTools:{},openLinks:{},message:{text:{}}});
@@ -59,14 +77,17 @@ test('the connected workspace uses the standalone layout, edits records, links t
    if(path==='/trialagents-mark-white.png')return r.fulfill({path:'assets/mark-dark.png'})
    return r.fulfill({path:path==='/'?'dist/pipeline.html':'dist/pipeline.js',contentType:path==='/'?'text/html':'application/javascript'})
  })
- const requests=[]
+ const requests=[],activeWaits=new Set()
+ t.after(()=>{for(const c of activeWaits)c.abort()})
  await page.route('https://pipeline.trialagents.com/**',async r=>{
    const req=r.request(),path=new URL(req.url()).pathname
    if(path==='/api/pipeline/frame'){
      const headers=await req.allHeaders(),body=req.postData()
      requests.push({op:JSON.parse(body).op,headers})
-     const answer=await serveFrame(new Request(req.url(),{method:'POST',headers,body}),{db:data,run,audience:resource})
-     return r.fulfill({status:answer.status,json:await answer.json()})
+     const controller=new AbortController();activeWaits.add(controller)
+     const answer=await serveFrame(new Request(req.url(),{method:'POST',headers,body,signal:controller.signal}),{db:data,run,selection,audience:resource})
+     activeWaits.delete(controller)
+     return r.fulfill({status:answer.status,json:await answer.json()}).catch(()=>{})
    }
    const files={'/pipeline-embedded':'dist/pipeline-embedded.html','/pipeline-assets/pipeline-embedded.js':'dist/pipeline-embedded.js','/trialagents-mark-white.png':'assets/mark-dark.png'}
    if(files[path])return r.fulfill({path:files[path],contentType:path.endsWith('.js')?'application/javascript':path.endsWith('.png')?'image/png':'text/html'})
@@ -115,10 +136,18 @@ test('the connected workspace uses the standalone layout, edits records, links t
  assert.equal((await run(user,{op:'bootstrap',workspace})).items.filter(r=>r.name==='UI parity test').length,1)
  await frame.locator('[data-tab="Custom views"]').click()
  await frame.locator('[data-view="'+id+'"]').click()
+ assert.equal(await frame.getByRole('button',{name:'Share current view'}).count(),0)
  assert.equal(messages.length,0)
  await frame.getByRole('button',{name:'Ask ChatGPT to create a custom view'}).click()
  await expect.poll(()=>messages.length).toBe(1)
  assert.match(messages[0].content[0].text,/create and save a new custom view/)
+ const ask={workspace,workspace_context:initial.structuredContent.result.workspace_context,instance:initial.structuredContent.result.panel_instance}
+ assert.equal(requests.filter(r=>r.op==='selection.answer').length,0)
+ const other=await assistant('read_pipeline',{workspace},'other chat')
+ assert.equal((await assistant('read_active_pipeline_selection',{...ask,workspace_context:other.structuredContent.result.workspace_context},'other chat')).isError,true)
+ const pulled=await assistant('read_active_pipeline_selection',ask)
+ assert.equal(pulled.structuredContent?.result.view.id,id,JSON.stringify(pulled))
+ assert.equal(messages.length,1)
  const context=await page.evaluate(()=>window.getSelectionFromApp())
  assert.equal(JSON.parse(context.content[0].text).view.id,id)
  const inside=frame.frameLocator('#view-plot iframe')
@@ -130,6 +159,16 @@ test('the connected workspace uses the standalone layout, edits records, links t
  await frame.getByRole('button',{name:'Save control values'}).click()
  await frame.getByText('Control values saved.').waitFor()
  assert.equal((await run(user,{op:'assistant.view',workspace,input:{id,content:true}})).state.committee,'Beta')
+ // Another client advances the workspace revision after the visible list and controls were saved.
+ const latest=await run(user,{workspace,op:'bootstrap'})
+ await run(user,{workspace,op:'items.save',input:{upsert:[{...latest.items[0],name:'UI parity test'}]},revision:latest.revision,requestId:crypto.randomUUID()})
+ await frame.locator('[data-delete-view="'+id+'"]').click()
+ await frame.getByRole('button',{name:'Confirm',exact:true}).click()
+ await frame.getByText('View removed.',{exact:true}).waitFor()
+ assert.equal(await frame.locator('[data-view="'+id+'"]').count(),0)
+ await standalone.reload();await standalone.locator('[data-tab="Custom views"]').click()
+ await expect(standalone.getByText('No saved views yet.',{exact:false}).or(standalone.getByText('Ask ChatGPT or Claude to create your first custom view.'))).toBeVisible()
+ assert.equal((await run(user,{op:'bootstrap',workspace})).views.length,0)
  await page.setViewportSize({width:390,height:810});await page.reload()
  await frame.getByRole('heading',{name:'Pipeline Overview'}).waitFor()
  await expect(frame.locator('#rail')).toBeVisible()
@@ -145,6 +184,7 @@ test('the connected workspace uses the standalone layout, edits records, links t
  assert.equal((await probe({workspace,op:'bootstrap'},{...captured,origin:'https://elsewhere.example'})).status,403)
  await db.exec('UPDATE oauth_access_tokens SET revoked_at=now()')
  assert.equal((await probe({workspace,op:'bootstrap'})).status,401)
+ for(const c of activeWaits)c.abort()
  assert.deepEqual(errors,[])
 })
 

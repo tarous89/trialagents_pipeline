@@ -43,6 +43,15 @@ test('invites require payment, are email-bound, delivered once, and roles apply 
  const view=await run(editor,req('view.save',{title:'Programs',filters:{type:'Program'}}),'Claude');version=view.revision
  const d=await run(owner,req('design.save',{title:'Portfolio',tabs:[{id:randomUUID(),view:view.id,label:'Programs report'}],accent:'#226644'}));version=d.revision
  await assert.rejects(run(editor,req('view.remove',{id:view.id})),{status:409})
+ await assert.rejects(run(reader,req('view.remove',{id:view.id,version:1,removePins:true})),{status:403})
+ await assert.rejects(run(editor,req('view.remove',{id:view.id,version:1,removePins:true})),{status:409})
+ const revised=await run(editor,req('view.save',{id:view.id,title:'Revised',filters:{type:'Program'}}),'Claude');version=revised.revision
+ await assert.rejects(run(owner,req('view.remove',{id:view.id,version:1,removePins:true})),{status:409})
+ assert.equal((await run(owner,req('bootstrap'))).views[0].title,'Revised')
+ const removal=req('view.remove',{id:view.id,version:2,removePins:true},{revision:0})
+ version=(await run(owner,removal)).revision
+ assert.equal((await run(owner,removal)).revision,version)
+ const after=await run(owner,req('bootstrap'));assert.equal(after.views.length,0);assert.equal(after.tabs.length,0)
  await run(owner,req('team.member',{user:editor.id,role:'reader'}))
  await assert.rejects(run(editor,req('view.save',{title:'New',filters:{}}),'Claude'),{status:403})
 })

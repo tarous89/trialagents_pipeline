@@ -81,13 +81,12 @@ async function currentSelection(){
 }
 let sending=false,mounting=false;
 document.addEventListener('click',async e=>{
- const button=e.target.closest('[data-ask-view],[data-share-context]');if(!button||sending)return;
- const create=button.hasAttribute('data-ask-view');if(create&&state.role==='reader')return;
+ const button=e.target.closest('[data-ask-view]');if(!button||sending||state.role==='reader')return;
  sending=true;button.disabled=true;
  let prompt='';
  try{
    const context=await currentSelection();
-   prompt=(create?'Please create and save a new custom view in this Pipeline workspace. Ask me what it should show if needed.':'Here is my current Pipeline view.')+' Workspace context: '+JSON.stringify(context);
+   prompt='Please create and save a new custom view in this Pipeline workspace. Ask me what it should show if needed. Workspace context: '+JSON.stringify(context);
    await hostRequest('send-message',{prompt});
  }catch(error){
    if(prompt){
@@ -97,13 +96,46 @@ document.addEventListener('click',async e=>{
  }finally{sending=false;button.disabled=false}
 });
 let generation=0
-async function showTarget({workspace,url}){
+// Keep the current selection inside the frame until a matching assistant request arrives.
+let panelWait
+async function serveSelection(workspace,instance,signal){
+ while(!signal.aborted){
+   if(document.hidden){
+     await new Promise(resolve=>{
+       const wake=()=>{document.removeEventListener('visibilitychange',wake);signal.removeEventListener('abort',wake);resolve()}
+       document.addEventListener('visibilitychange',wake);signal.addEventListener('abort',wake)
+     })
+     continue
+   }
+   try{
+     const secret=await grant(workspace)
+     const response=await fetch('/api/pipeline/frame',{method:'POST',credentials:'omit',signal,cache:'no-store',headers:{'Content-Type':'application/json','X-Pipeline-Surface':'workspace',Authorization:'Pipeline-Frame '+secret},body:JSON.stringify({op:'selection.wait',workspace,input:{instance}})})
+     if(response.status===401){grants.delete(workspace);continue}
+     if(!response.ok)throw Error('Selection request unavailable')
+     const {id}=await response.json()
+     if(!id||signal.aborted)continue
+     const context=document.hidden?null:await currentSelection().catch(()=>null)
+     if(!signal.aborted)await window.pipelineTransport({op:'selection.answer',workspace,input:{instance,id,context}})
+   }catch{
+     if(!signal.aborted)await new Promise(resolve=>setTimeout(resolve,2000))
+   }
+ }
+}
+window.addEventListener('pagehide',()=>panelWait?.abort())
+async function showTarget({workspace,url,instance}){
+ panelWait?.abort()
  const seq=++generation;mounting=true
  try{
    const target=new URL(url)
    if(target.origin!==appOrigin||target.searchParams.get('workspace')!==workspace)throw Error('Invalid workspace link')
    const snapshot=await window.pipelineTransport({op:'bootstrap',workspace})
-   if(seq===generation)await window.pipelineMount(snapshot,target.searchParams)
+   if(seq===generation){
+     await window.pipelineMount(snapshot,target.searchParams)
+     if(seq===generation&&instance){
+       panelWait=new AbortController()
+       void serveSelection(workspace,instance,panelWait.signal)
+     }
+   }
  }catch(e){
    if(seq!==generation)return
    const msg=document.createElement('p'),retry=document.createElement('button')

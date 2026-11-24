@@ -24,7 +24,15 @@ test('standalone shared-web MCP authenticates the exact audience and runs the co
  assert.equal((await protectedResource().json()).resource,resource)
  async function rpc(method,params,headers){const res=await request(method,params,'member',headers),raw=await res.text();assert.equal(res.status,200,raw)
    const json=JSON.parse(raw.startsWith('{')?raw:raw.split('\n').find(l=>l.startsWith('data: ')).slice(6));assert.ifError(json.error);return json.result}
- async function call(name,args){const r=await rpc('tools/call',{name,arguments:args});assert.ok(!r.isError,JSON.stringify(r.content));return r}
+ let context
+ const scoped=(name,args,session)=>rpc('tools/call',{name,arguments:args,_meta:{'openai/session':session}})
+ async function call(name,args){
+   const quiet=tools.find(t=>t.name===name).inputSchema.properties.workspace_context
+   const r=await scoped(name,quiet?{...args,workspace_context:context}:args,'session A')
+   assert.ok(!r.isError,JSON.stringify(r.content))
+   context=r.structuredContent.result.workspace_context??context
+   return r
+ }
  const init=await rpc('initialize',{protocolVersion:'2025-11-25',clientInfo:{name:'test',version:'1'},capabilities:{}});assert.equal(init.serverInfo.name,'TrialAgents Pipeline')
  const {tools}=await rpc('tools/list',{});assert.ok(tools.length>=25);assert.ok(tools.every(t=>t.securitySchemes?.[0]?.type==='oauth2'&&t._meta.securitySchemes[0].type==='oauth2'&&t.outputSchema));assert.ok(tools.every(t=>!t.name.includes('billing')))
  await t.test('modern clients discover, enumerate tools and read a program',async()=>{
@@ -38,11 +46,25 @@ test('standalone shared-web MCP authenticates the exact audience and runs the co
    assert.ok(await modern('server/discover'))
    assert.deepEqual((await modern('tools/list')).tools.map(t=>t.name),tools.map(t=>t.name))
    const res=await modern('tools/call',{name:'read_pipeline',arguments:{workspace,query:{table:'Program',search:'EX-101',fields:['name','status']}}})
+   assert.equal(tools.find(t=>t.name==='read_pipeline')._meta.ui.resourceUri,widgetUri)
+   assert.equal(res._meta.pipeline.workspace,workspace)
+   assert.equal(res.structuredContent.result.url,res._meta.pipeline.url)
+   assert.ok(res.structuredContent.result.workspace_context)
    assert.equal(res.structuredContent.result.records[0].values.name,'Clinical development of EX-101')
  })
  const open=await call('open_pipeline',{query:{table:'Milestone',programSearch:'EX-101',fields:['name','end'],order:'end',limit:1}})
  const rows=open.structuredContent.result.data.records;assert.equal(rows[0].values.name,'Site readiness review');assert.doesNotMatch(JSON.stringify(open),/user@example|contacts|billing/)
  const result=async(n,a)=>(await call(n,a)).structuredContent.result
+ const quietArgs={workspace,workspace_context:context,query:{table:'Program',fields:['name']}}
+ assert.equal((await scoped('read_pipeline_followup',quietArgs,'session B')).isError,true)
+ const quiet=await call('read_pipeline_followup',quietArgs)
+ assert.equal(quiet._meta,undefined);assert.equal(quiet.structuredContent.result.records.length,1)
+ const firstWrite=await scoped('create_pipeline_record',{workspace,revision:0,request_id:randomUUID(),table:'Program',values:{name:'Should never be created'}},'session B')
+ assert.equal(firstWrite.isError,true);assert.match(firstWrite.content[0].text,/open_pipeline/)
+ for(const selection of ['design','workspaces']){
+   const first=await scoped('read_pipeline',{selection},'session B')
+   assert.equal(first._meta.pipeline.workspace,workspace);assert.ok(first.structuredContent.result.workspace_context)
+ }
  const metadata=await result('get_pipeline_schema',{workspace});assert.ok(metadata.canManage)
  const def=await result('add_pipeline_table',{workspace,revision:0,request_id:randomUUID(),label:'Committees'})
  const row=await result('create_pipeline_record',{workspace,revision:def.revision,request_id:randomUUID(),table:def.id,values:{name:'Board'}})

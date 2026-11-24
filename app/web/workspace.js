@@ -62,7 +62,7 @@ async function change(op,input,after){
     await refreshState();
     lastConfirmed=op==='items.save'?'Saved record changes':op==='examples.remove'?'Removed example records':op==='view.remove'?'Removed a saved view':'';
     if(after)await after(result);
-    notify(op==='examples.remove'?(result.kept?'Examples cleared. Records linked to your work were kept.':'Examples removed.'):'Saved');
+    notify(op==='examples.remove'?(result.kept?'Examples cleared. Records linked to your work were kept.':'Examples removed.'):op==='view.remove'?'View removed.':'Saved');
   }catch(error){
     notify(error.message);
     try{await refreshState()}catch{document.querySelector('#app').replaceChildren();el('rail').replaceChildren()}
@@ -240,7 +240,17 @@ document.addEventListener('click',async e=>{
  if(b.dataset.settingsSection){settingTab=b.dataset.settingsSection;sectionData=null;render();el('app').scrollTop=0;void loadSection()}
  if(b.dataset.tab==='Settings')void loadSection();
  if(b.dataset.view){selectedView=b.dataset.view;render()}
- if(b.dataset.deleteView && await confirmAction('Remove this shared view?'))void change('view.remove',{id:b.dataset.deleteView},()=>{selectedView='';render()});
+ if(b.dataset.deleteView){
+   const workspace=state.workspace,id=b.dataset.deleteView;
+   const view=state.views.find(v=>v.id===id),pinned=state.tabs.some(t=>t.view===id);
+   if(!view)return;
+   const version=view.version;
+   if(pinned&&state.role!=='owner'){notify('Ask the workspace owner to unpin this view before removing it.');return}
+   const message='Remove “'+view.title+'”'+(pinned?' and its pinned navigation tab':'')+'?';
+   if(await confirmAction(message)&&workspace===state.workspace)void change('view.remove',{id,version,...pinned&&{removePins:true}},()=>{
+     if(selectedView===id)selectedView='';render()
+   });
+ }
  if(b.dataset.revoke)void change('team.revoke',{id:b.dataset.revoke},loadSection);
  if(b.dataset.external)void window.pipelineLink('https://pipeline.trialagents.com'+b.dataset.external);
  if(b.dataset.action?.startsWith('billing.'))void openBilling(b.dataset.action);
