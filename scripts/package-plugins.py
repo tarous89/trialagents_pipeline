@@ -1,49 +1,63 @@
-"""Build the ChatGPT and Claude release archives from the plugin sources in this repository."""
+"""Build directory archives only on an explicit release request."""
 from pathlib import Path
 import argparse
 import json
+import re
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--output", type=Path, default=ROOT / "dist")
+parser.add_argument("--host", choices=("chatgpt", "claude"), help="Build only this host's archive")
+parser.add_argument("--browser-app-id", help="Build a private ChatGPT web test ZIP for this verified Pipeline app registration")
 args = parser.parse_args()
+if args.browser_app_id is not None:
+    if args.host == "claude" or not re.fullmatch(r"(?:asdk_app_|connector_|templated_apps_)[A-Za-z0-9][A-Za-z0-9_-]*", args.browser_app_id):
+        parser.error("--browser-app-id requires the registered ChatGPT app ID for the Pipeline endpoint")
+    args.host = "chatgpt"
 args.output.mkdir(parents=True, exist_ok=True)
-
-
-def read_tree(base):
-    return {
-        path.relative_to(base).as_posix(): path.read_bytes()
-        for path in base.rglob("*")
-        if path.is_file() and not path.is_symlink()
-    }
-
-
-def check_png(payload, path):
-    assert payload[path].startswith(b"\x89PNG\r\n\x1a\n"), path
-
-
-versions = {}
-for host in ("chatgpt", "claude"):
-    payload = read_tree(ROOT / "plugins" / host)
-    assert "skills/manage-pipeline/SKILL.md" in payload
+for host in ((args.host,) if args.host else ("chatgpt", "claude")):
+    target = host
+    payload = {}
+    for directory in ("shared", host):
+        base = ROOT / "plugins" / directory
+        if not base.is_dir():
+            continue
+        for path in base.rglob("*"):
+            if path.is_file() and not path.is_symlink():
+                payload[path.relative_to(base).as_posix()] = path.read_bytes()
     if host == "chatgpt":
         manifest = json.loads(payload["plugin.json"])
-        openai = manifest["extensions"]["com.openai"]
-        assert openai["apps"] == "./.app.json"
-        assert json.loads(payload[".app.json"])["apps"]["trialagents-pipeline"]["required"] is True
-        for key in ("composerIcon", "composerIconDark", "logo", "logoDark"):
-            check_png(payload, openai["interface"][key].removeprefix("./"))
+        extension = manifest["extensions"]["com.openai"]
+        artwork = ["assets/" + name + ".png" for name in ("composer-icon", "composer-icon-dark", "logo", "logo-dark")]
+        review = extension["review"]["test_cases"]
+        assert len(review["positive"]) == 5 and len(review["negative"]) == 3
+        assert json.loads(payload["mcp.json"])["mcpServers"]["trialagents-pipeline"]["url"] == "https://mcp.trialagents.com/pipeline/chatgpt"
+        assert ".app.json" not in payload and "apps" not in extension
+        target = "chatgpt-submission"
+        if args.browser_app_id is not None:
+            target = "chatgpt-browser"
+            del payload["mcp.json"]
+            extension["apps"] = "./.app.json"
+            for key in ("test_cases", "prompts"):
+                extension["review"].pop(key, None)
+            app = {"apps": {"trialagents-pipeline": {"id": args.browser_app_id, "required": True}}}
+            payload[".app.json"] = (json.dumps(app, indent=2) + "\n").encode()
+            payload["plugin.json"] = (json.dumps(manifest, indent=2, ensure_ascii=False) + "\n").encode()
     else:
         manifest = json.loads(payload[".claude-plugin/plugin.json"])
+        artwork = [manifest["icon"]]
         server = json.loads(payload[".mcp.json"])["mcpServers"]["trialagents-pipeline"]
-        assert server["type"] == "http" and server["url"].endswith("/pipeline/claude")
-        check_png(payload, manifest["icon"])
+        assert server == {"type": "http", "url": "https://mcp.trialagents.com/pipeline/claude"}
+        assert "skills/manage-pipeline/SKILL.md" in payload
+        assert payload[manifest["icon"]] == (ROOT / "assets" / "claude-mark.png").read_bytes()
         listing = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_bytes())
         assert listing["plugins"][0]["version"] == manifest["version"]
-    assert manifest["name"] == "trialagents-pipeline"
-    versions[host] = manifest["version"]
-    destination = args.output / f"trialagents-pipeline-{host}-plugin-{manifest['version']}.zip"
+    for path in artwork:
+        source = "claude-mark.png" if host == "claude" else "mark-dark.png" if "dark" in path else "mark-light.png"
+        payload[path] = (ROOT / "assets" / source).read_bytes()
+        assert payload[path].startswith(b"\x89PNG\r\n\x1a\n")
+    destination = args.output / f"trialagents-pipeline-{target}-{manifest['version']}.zip"
     with zipfile.ZipFile(destination, "w") as archive:
         for name, content in sorted(payload.items()):
             item = zipfile.ZipInfo(name, (2026, 11, 23, 0, 0, 0))
@@ -52,4 +66,3 @@ for host in ("chatgpt", "claude"):
     with zipfile.ZipFile(destination) as archive:
         assert archive.testzip() is None
     print(destination)
-assert versions["chatgpt"] == versions["claude"], versions

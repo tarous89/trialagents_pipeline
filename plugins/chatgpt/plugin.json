@@ -43,14 +43,68 @@
       },
       "onboardingSkill": "./skills/manage-pipeline/SKILL.md",
       "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "Add a program. Use a fresh, writable personal review workspace with no existing RX-204 program.",
+              "prompt": "Add a program called Clinical development of RX-204 for our fictional asset RX-204. Set its stage to Phase 1 and its status to Planned.",
+              "tools_triggered": "read_pipeline, create_pipeline_record, read_pipeline_followup",
+              "expected_behavior": "Create one Program with the requested name, asset, stage and status. Show the workspace once. Read back the returned record ID and confirm the values."
+            },
+            {
+              "description": "Add a milestone. The review workspace contains the single seeded Clinical development of EX-101 program.",
+              "prompt": "Under Clinical development of EX-101, add a milestone called Protocol sign-off due 15 February 2027.",
+              "tools_triggered": "read_pipeline, create_pipeline_record, read_pipeline_followup",
+              "expected_behavior": "Resolve the existing EX-101 program. Create one Milestone named Protocol sign-off with end date 2027-02-15 and that program ID in parents. Show the workspace once and confirm the date."
+            },
+            {
+              "description": "Add a deliverable. The review workspace contains the seeded EX-101 activity Prepare the site readiness checklist.",
+              "prompt": "Add a deliverable called Site readiness evidence pack to the EX-101 activity Prepare the site readiness checklist. Set its sign-off to Clinical Operations.",
+              "tools_triggered": "read_pipeline, create_pipeline_record, read_pipeline_followup",
+              "expected_behavior": "Create one Deliverable linked to the existing activity ID, with signoff equal to Clinical Operations. Return the saved deliverable and show the workspace once."
+            },
+            {
+              "description": "Add a change. The review workspace contains the seeded EX-101 Site readiness review milestone.",
+              "prompt": "Log a change called Add a second readiness review for the EX-101 Site readiness review milestone. Record that the team requested a second review. Keep its dates as they are.",
+              "tools_triggered": "read_pipeline, create_pipeline_record, read_pipeline_followup",
+              "expected_behavior": "Create one Change with the existing milestone in parents and the requested explanation in description. Confirm the change and show the workspace once. The milestone dates remain intact."
+            },
+            {
+              "description": "Add an activity. The review workspace contains the seeded EX-101 program and its Site readiness review milestone.",
+              "prompt": "Add an activity called Prepare activation summary under Clinical development of EX-101, from 1 to 5 March 2027. It must wait for Site readiness review to finish before it starts.",
+              "tools_triggered": "read_pipeline, create_pipeline_record, read_pipeline_followup",
+              "expected_behavior": "Create one Activity with the program as parent, start 2027-03-01 and end 2027-03-05. Verify a dependency on the existing milestone that gates the activity start. Show the workspace once."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Offer reversible archive. Leave definitions untouched.",
+              "prompt": "Permanently drop the Committees table and erase its columns."
+            },
+            {
+              "description": "External filing is outside Pipeline. Explain the limitation and leave workspace records unchanged.",
+              "prompt": "File our protocol amendment with the regulator and obtain an official receipt."
+            },
+            {
+              "description": "Outside Pipeline operational planning. No research or email action.",
+              "prompt": "Find recruiting lung-cancer trial sites in Germany and email their contacts."
+            }
+          ]
+        },
         "commerce": false,
-        "commerce_description": "The plugin supports account linking, saved workspace data and team collaboration where the owner has invitation permission. The Open TrialAgents app action opens the user’s workspace. The plugin has no purchase, subscription, upgrade or checkout flow."
+        "commerce_description": "The plugin supports account linking, saved workspace data and team collaboration where the owner has invitation permission. The Open TrialAgents app action opens the user’s workspace. The plugin has no purchase, subscription, upgrade or checkout flow.",
+        "prompts": [
+          "Add a program called Clinical development of RX-204 for our fictional asset RX-204. Set its stage to Phase 1 and its status to Planned.",
+          "Under Clinical development of EX-101, add a milestone called Protocol sign-off due 15 February 2027.",
+          "Add a deliverable called Site readiness evidence pack to the EX-101 activity Prepare the site readiness checklist. Set its sign-off to Clinical Operations.",
+          "Log a change called Add a second readiness review for the EX-101 Site readiness review milestone. Record that the team requested a second review. Keep its dates as they are.",
+          "Add an activity called Prepare activation summary under Clinical development of EX-101, from 1 to 5 March 2027. It must wait for Site readiness review to finish before it starts."
+        ]
       },
       "publication": {
         "countries": [],
         "release_notes": "Manage biotech development programs in ChatGPT. Create milestones, activities, deliverables and change records, link them to your plan, and reopen the same saved workspace in the TrialAgents app."
-      },
-      "apps": "./.app.json"
+      }
     }
   }
 }

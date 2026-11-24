@@ -2,11 +2,13 @@
 
 ## Approved Pipeline baseline
 
-The HTML, description and extracted active JavaScript/CSS landed in this repository at [2d5e2895](https://github.com/tarous89/trialagetns_pipeline/tree/2d5e28954602822998737a42fcb7157206d9ffd1/prototypes/pipeline). Use [the original HTML](../prototypes/pipeline/Pipeline.html) and [its full workflow description](../prototypes/pipeline/README.md). The source HTML has 875,405 bytes and SHA-256 `1fe80bbba964c4a571efb1e3b6c63eae2e319aab2ac72f66f6bedeec4d216db8`. This matches the approved design supplied before the commit.
+The HTML, description and extracted active JavaScript/CSS landed in this repository at [2d5e2895](https://github.com/tarous89/trialagents_pipeline/tree/2d5e28954602822998737a42fcb7157206d9ffd1/prototypes/pipeline). Use [the original HTML](../prototypes/pipeline/Pipeline.html) and [its full workflow description](../prototypes/pipeline/README.md). The source HTML has 875,405 bytes and SHA-256 `1fe80bbba964c4a571efb1e3b6c63eae2e319aab2ac72f66f6bedeec4d216db8`. This matches the approved design supplied before the commit.
 
 [Platform Programs scope](https://github.com/tarous89/trialy/blob/a7dbaa6e0b74e05f0ea0841cc445686e374c9487/docs/product/app-template-blueprints/apps/PROGRAMS.md) and the [earlier catalog template](https://github.com/tarous89/trialy/tree/a7dbaa6e0b74e05f0ea0841cc445686e374c9487/templates/source/project-oversight) were reviewed for history. Standalone implementation follows the committed Pipeline handoff above.
 
-## Intel source map
+## Historical Intel design references
+
+These pinned references document the original comparison. The active Pipeline implementation, assets and ChatGPT server are maintained in this repository. See [release routing](RELEASE.md).
 
 All app paths below refer to [intel_agent_app at 4a0b2d86](https://github.com/tarous89/intel_agent_app/tree/4a0b2d8680bb480f41929b062d0ebb01b122c645). MCP paths refer to [intel_mcp at eaee7070](https://github.com/tarous89/intel_mcp/tree/eaee7070e05a8247f1121209a1345daa7e7d7000). Both repositories are deployed from main. Extract shared entry points only when necessary. Give those entry points Pipeline data and product labels. Keep the existing Intel callers covered by regression tests.
 
