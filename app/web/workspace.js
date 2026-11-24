@@ -1,30 +1,49 @@
 let state, busy=false, sectionData=null, selectedView='', viewSearch='', viewAuthor='', viewProgram='';
 const originalNames={...names};
 const model=()=>[...data,...orgDb.map(r=>({...r,type:'Organization'}))];
-let baselineItems=new Map(),viewTimer,viewGeneration=0,viewRevision=-1,lastConfirmed='';
-function scheduleViewRefresh(immediate=false){
- clearTimeout(viewTimer);
- const generation=++viewGeneration;
- if(!state||tab!=='Custom views'||document.hidden)return;
- const workspace=state.workspace;
- viewTimer=setTimeout(async()=>{
+let baselineItems=new Map(),syncTimer,syncGeneration=0,lastConfirmed='';
+function scheduleWorkspaceRefresh(immediate=false){
+ clearTimeout(syncTimer);
+ const generation=++syncGeneration;
+ if(!state||document.hidden)return;
+ syncTimer=setTimeout(async()=>{
+   const previous=state;
+   if(!previous)return;
+   const revision=previous.revision;
    try{
-     if(!busy&&!el('drawer').open){
-       const result=await rpc('view.list',{knownRevision:viewRevision});
-       if(generation!==viewGeneration||workspace!==state.workspace||tab!=='Custom views'||busy)return;
-       if(result.views&&JSON.stringify(result.views)!==JSON.stringify(state.views)){
-         state.views=result.views;
-         if(selectedView&&!result.views.some(v=>v.id===selectedView))selectedView='';
-         render();
-       }
-       if(Number.isInteger(result.revision))viewRevision=result.revision;
-     }
-   }catch(error){if(generation===viewGeneration&&immediate)notify(error.message)}
-   finally{if(generation===viewGeneration)scheduleViewRefresh()}
- },immediate?0:6000);
+     if(busy)return;
+     const snapshot=await rpc('bootstrap',{knownRevision:revision,knownRole:previous.role,knownTeam:previous.team,accessOnly:tab==='Settings'});
+     if(generation!==syncGeneration||state!==previous||state.revision!==revision||busy||!snapshot.items)return;
+     applyLiveSnapshot(snapshot);
+   }catch(error){
+     if(generation!==syncGeneration||state!==previous)return;
+     if([401,403].includes(error.status)){
+       state=null;el('drawer').close();el('app').replaceChildren();el('rail').replaceChildren();notify(error.message);
+     }else if(immediate)notify(error.message);
+   }finally{if(generation===syncGeneration)scheduleWorkspaceRefresh()}
+ },immediate?0:5000);
 }
-document.addEventListener('visibilitychange',()=>scheduleViewRefresh(true));
-window.addEventListener('focus',()=>scheduleViewRefresh(true));
+document.addEventListener('visibilitychange',()=>scheduleWorkspaceRefresh(true));
+window.addEventListener('focus',()=>scheduleWorkspaceRefresh(true));
+
+function applyLiveSnapshot(snapshot){
+ if(snapshot.role!==state.role){sectionData=null;sectionLoad++;settingTab='Personal'}
+ const main=el('app'),scroll=main.scrollTop,focused=document.activeElement;
+ const focusId=main.contains(focused)?focused.id:'',caret=focusId?focused.selectionStart:null;
+ if(snapshot.role==='reader'&&el('editform')&&el('drawer').open)el('drawer').close();
+ hydrate(snapshot);migrate();progress();
+ if(selectedView&&!state.views.some(v=>v.id===selectedView))selectedView='';
+ if(tab.startsWith('custom-')&&!Object.hasOwn(names,tab))tab='Custom views';
+ const readOnlyId=el('drawer').open&&el('drawer').querySelector('[data-saved-record]')?.dataset.savedRecord;
+ if(readOnlyId){if(get(readOnlyId))openItem(readOnlyId);else el('drawer').close()}
+ render();main.scrollTop=scroll;
+ if(focusId&&el(focusId)){
+   el(focusId).focus({preventScroll:true});
+   if(caret!=null)el(focusId).setSelectionRange(caret,caret);
+ }
+ if(el('drawer').open&&el('editform')&&draftConflict())el('error').textContent=conflictMessage;
+}
+
 
 let noticeTimer;
 function notify(message,success=false){
@@ -34,13 +53,12 @@ function notify(message,success=false){
 }
 function hydrate(snapshot){
   if(state?.workspace!==snapshot.workspace){viewSearch='';viewAuthor='';viewProgram='';lastConfirmed='';selectedView=''}
-  viewRevision=snapshot.revision;
   state=snapshot;for(const id of Object.keys(names))delete names[id];Object.assign(names,originalNames);
   for(const t of state.tabs)names[t.builtin||'custom-'+t.id]=t.label;
   data=structuredClone(state.items.filter(r=>r.type!=='Organization').map(r=>({...r,start:r.start??'',end:r.end??'',owner:r.owner??''})));
   orgDb=structuredClone(state.items.filter(r=>r.type==='Organization'));
   settings={...state.settings,emails:state.preferences};
-  directory.splice(0,directory.length,[state.user.name,'']);
+  directory.splice(0,directory.length,...(state.assignableMembers||[state.user]).map(member=>[member.name||member.email,'']));
   baselineItems=new Map(model().map(r=>[r.id,JSON.stringify(r)]));
   document.documentElement.style.setProperty('--pipeline-accent',state.accent);
   const header=el('pipeline-header')?.shadowRoot;
@@ -58,7 +76,7 @@ async function rpc(op,input={},extra={}){
   return window.pipelineTransport(req);
 }
 async function refreshState(){hydrate(await rpc('bootstrap'));render()}
-async function change(op,input,after){
+async function change(op,input,after,recover){
   if(busy)return;busy=true;document.querySelector('.layout').inert=true;
   try{
     const result=await rpc(op,input);
@@ -69,13 +87,14 @@ async function change(op,input,after){
   }catch(error){
     notify(error.message);
     try{await refreshState()}catch{document.querySelector('#app').replaceChildren();el('rail').replaceChildren()}
+    if(recover&&error.status===409)recover(error);
   }finally{busy=false;document.querySelector('.layout').inert=false}
 }
-function persistPortfolio(){
+function persistPortfolio(recover){
   const list=model(),ids=new Set(list.map(r=>r.id));
   const upsert=list.filter(r=>baselineItems.get(r.id)!==JSON.stringify(r));
   const remove=[...baselineItems.keys()].filter(id=>!ids.has(id));
-  if(upsert.length||remove.length)void change('items.save',{upsert,remove});
+  if(upsert.length||remove.length)void change('items.save',{upsert,remove},undefined,recover);
 }
 // Set each production plugin URL when that assistant is available.
 const assistantUrls = {ChatGPT: '', Claude: ''};
@@ -299,7 +318,7 @@ window.pipelineMount=async(snapshot,search=new URLSearchParams(location.search))
   if(el('drawer').open)el('drawer').close();
   tab='Overview';filters={};selectedView='';sectionData=null;editing='';returnTo=null;expanded.clear();sectionLoad++;
  }
- hydrate(snapshot);mountPlan();scheduleViewRefresh(true);
+ hydrate(snapshot);mountPlan();scheduleWorkspaceRefresh(true);
  const record=search.get('record'),view=search.get('view');
  let selected=search.get('tab');
  if(['Updates','Digest'].includes(selected))selected='Overview';

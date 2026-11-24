@@ -52,7 +52,7 @@ window.pipelineTransport=async request=>{
    res=await send(await grant(request.workspace))
  }
  const result=await res.json()
- if(!res.ok)throw Error(result.error||'Pipeline request failed')
+ if(!res.ok)throw Object.assign(Error(result.error||'Pipeline request failed'),{status:res.status})
  return result
 }
 // A host request or an explicit click can read this frame's saved selection.
@@ -66,7 +66,7 @@ async function currentSelection(){
  if(Object.keys(activeFilters).length)context.filters=activeFilters;
  if(tab==='Settings')context.section=settingTab;
  if(lastConfirmed)context.lastAction=lastConfirmed;
- const access=await rpc('view.list',{knownRevision:view?-1:viewRevision});
+ const access=await rpc('view.list',{knownRevision:view?-1:state.revision});
  if(view){
    const v=access.views?.find(v=>v.id===view);
    context.view=v?{id:v.id,title:v.title}:'Selection unavailable';
@@ -144,6 +144,7 @@ async function showTarget({workspace,url,instance}){
  }finally{if(seq===generation)mounting=false}
 }
 bridge.port1.onmessage=({data})=>{
+ if(data.type==='refresh'){if(state?.workspace===data.workspace)scheduleWorkspaceRefresh(true);return}
  if(data.type==='target'){void showTarget(data);return}
  if(data.type==='read-context'){
    currentSelection().then(context=>bridge.port1.postMessage({type:'selection',id:data.id,context}),()=>bridge.port1.postMessage({type:'selection',id:data.id,error:'Selection unavailable; reopen the workspace.'}));

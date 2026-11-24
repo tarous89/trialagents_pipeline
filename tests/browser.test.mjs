@@ -13,13 +13,22 @@ test('authenticated browser opens empty, saves a record and renders every sectio
  w.fetch=async(url,init)=>{const r=JSON.parse(init.body);ops.push(r);if(r.op==='items.save'){snap.items=r.input.upsert;snap.revision++}
  return {ok:true,json:async()=>r.op==='bootstrap'?structuredClone(snap):r.op==='team.list'?{members:[],invitations:[]}:r.op==='logs'?{entries:[]}:{}}
  }
+ const member={id:'m-2',name:'Alex',email:'second@example.org'}
+ snap.assignableMembers=[{...member,id:'m-1',email:'first@example.org'},member]
  w.eval(script);const tick=()=>new Promise(r=>setTimeout(r,15));await tick()
  assert.equal(d.querySelectorAll('#rail [data-tab]').length,8);assert.doesNotMatch(d.querySelector('main').textContent,/NorthTherapeutics|Maya Chen/)
  assert.equal(d.querySelector('.sidebar-identity small').textContent,snap.user.email)
  assert(d.querySelector('[data-first-type="Program"]'))
- assert.equal(d.querySelector('[data-add]'),null);d.querySelector('[data-first-type="Program"]').click();const form=d.querySelector('#editform');assert(form)
- form.elements.recordName.value='First program';form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick()
- assert.equal(ops.filter(r=>r.op==='items.save').length,1);assert.equal(snap.items[0].name,'First program')
+ assert.equal(d.querySelector('[data-add]'),null);d.querySelector('[data-first-type="Program"]').click()
+ const currentForm=d.querySelector('#editform')
+ assert.equal(currentForm.querySelectorAll('#owner-options option').length,2)
+ currentForm.elements.owner.value='Alex <second@example.org>'
+ currentForm.elements.recordName.value='First program';currentForm.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick()
+ assert.equal(ops.filter(r=>r.op==='items.save').length,1);assert.equal(snap.items[0].name,'First program');assert.equal(snap.items[0].ownerId,member.id);assert.equal(snap.items[0].owner,'Alex')
+ d.querySelector('[data-edit]').click()
+ const edited=d.querySelector('#editform');edited.elements.owner.value='External advisor'
+ edited.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick()
+ assert.equal(snap.items[0].owner,'External advisor');assert.equal(snap.items[0].ownerId,null)
  for(const b of [...d.querySelectorAll('#rail [data-tab]')]){d.querySelector('#rail [data-tab="'+b.dataset.tab+'"]').click();await tick()}
  const tabs=['Personal','App','Team','Logs','Billing','Notifications','Support'];
  assert.deepEqual(Array.from(d.querySelectorAll('[data-settings-section]'),button=>button.textContent),tabs);
