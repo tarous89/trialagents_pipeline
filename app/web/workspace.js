@@ -26,8 +26,11 @@ function scheduleViewRefresh(immediate=false){
 document.addEventListener('visibilitychange',()=>scheduleViewRefresh(true));
 window.addEventListener('focus',()=>scheduleViewRefresh(true));
 
-function notify(message){
-  const n=el('notice');n.textContent=message;n.hidden=!message;
+let noticeTimer;
+function notify(message,success=false){
+  clearTimeout(noticeTimer);
+  const n=el('notice');n.classList.toggle('success',success);n.textContent=message;n.hidden=!message;
+  if(success)noticeTimer=setTimeout(()=>notify(''),4500);
 }
 function hydrate(snapshot){
   if(state?.workspace!==snapshot.workspace){viewSearch='';viewAuthor='';viewProgram='';lastConfirmed='';selectedView=''}
@@ -62,7 +65,7 @@ async function change(op,input,after){
     await refreshState();
     lastConfirmed=op==='items.save'?'Saved record changes':op==='examples.remove'?'Removed example records':op==='view.remove'?'Removed a saved view':'';
     if(after)await after(result);
-    notify(op==='examples.remove'?(result.kept?'Examples cleared. Records linked to your work were kept.':'Examples removed.'):op==='view.remove'?'View removed.':'Saved');
+    notify(op==='examples.remove'?(result.kept?'Examples cleared. Records linked to your work were kept.':'Examples removed.'):op==='view.remove'?'View removed.':op==='items.save'&&input.remove?.length?'Item deleted.':'Saved',true);
   }catch(error){
     notify(error.message);
     try{await refreshState()}catch{document.querySelector('#app').replaceChildren();el('rail').replaceChildren()}
@@ -133,7 +136,7 @@ function decorateWorkspace(){
       if(plot.isConnected)showBound(plot,detail,{more:load,save:state.role==='reader'?undefined:async draft=>{
         const receipt=await rpc('assistant.state',{id:view.id,version:detail.version,state:draft},{revision:detail.revision});
         if(state.revision===detail.revision)state.revision=receipt.revision;
-        detail.revision=receipt.revision;detail.version=receipt.version;view.version=receipt.version;lastConfirmed='Saved view controls';notify('Control values saved.')
+        detail.revision=receipt.revision;detail.version=receipt.version;view.version=receipt.version;lastConfirmed='Saved view controls';notify('Control values saved.',true)
       }})
     }
     void load(0).catch(e=>{if(plot.isConnected)plot.textContent=e.message})
