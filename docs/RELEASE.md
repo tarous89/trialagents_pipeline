@@ -45,8 +45,8 @@ The staging commands apply reviewed patches and copy the built code. Use clean c
 
 | Surface | Remote MCP URL |
 | --- | --- |
-| ChatGPT | https://mcp.trialagents.com/pipeline/mcp |
-| Claude | https://mcp.trialagents.com/pipeline-claude/mcp |
+| ChatGPT | https://mcp.trialagents.com/pipeline/chatgpt |
+| Claude | https://mcp.trialagents.com/pipeline/claude |
 
 Set PIPELINE_MCP_ENABLED=true on **both** the Intel authorization/web service and the Intel MCP service. Keep the existing MCP_RESEARCH_ENABLED mount active. Reuse the existing OAuth issuer, dynamic client registration, internal control-plane URL and service configuration. The resource in the token must match the exact endpoint. Each endpoint advertises its own protected-resource metadata. Authorization, role changes and disconnection remain independent of the other product and assistant.
 
@@ -69,7 +69,7 @@ The Claude package in plugins/claude mirrors ChatGPT 0.2.5. It has the same name
 | ChatGPT 0.2.5 | Claude 0.2.5 |
 | --- | --- |
 | plugin.json with the com.openai interface, onboarding skill, review and publication blocks | .claude-plugin/plugin.json with displayName, icon and legal/support URLs. Claude has no starter-prompt, review or release-notes fields in the manifest, so those go in the directory submission form. |
-| .app.json binding the published ChatGPT app | .mcp.json with a remote HTTP server at https://mcp.trialagents.com/pipeline-claude/mcp. Claude discovers OAuth from the endpoint's protected-resource metadata and registers dynamically. The plugin holds no client configuration. |
+| .app.json binding the published ChatGPT app | .mcp.json with a remote HTTP server at https://mcp.trialagents.com/pipeline/claude. Claude discovers OAuth from the endpoint's protected-resource metadata and registers dynamically. The plugin holds no client configuration. |
 | assets/ logo, dark logo and composer icons | .claude-plugin/icon.png, the same image as logo.png |
 | skills/manage-pipeline: display the workspace inline | Same rules. Where Claude renders MCP Apps (web, desktop, mobile), the workspace shows inline. In Claude Code, answer in text with the returned workspace link, and ask which view or record the user means instead of reading the screen selection. |
 

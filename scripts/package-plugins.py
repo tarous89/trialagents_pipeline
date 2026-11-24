@@ -37,7 +37,7 @@ for host in ("chatgpt", "claude"):
     else:
         manifest = json.loads(payload[".claude-plugin/plugin.json"])
         server = json.loads(payload[".mcp.json"])["mcpServers"]["trialagents-pipeline"]
-        assert server["type"] == "http" and server["url"].endswith("/pipeline-claude/mcp")
+        assert server["type"] == "http" and server["url"].endswith("/pipeline/claude")
         check_png(payload, manifest["icon"])
         listing = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_bytes())
         assert listing["plugins"][0]["version"] == manifest["version"]
