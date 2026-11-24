@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFile} from 'node:fs/promises'
 import {build} from 'esbuild'
-import {chromium} from '@playwright/test'
+import {chromium,expect} from '@playwright/test'
 import headless from '@sparticuz/chromium'
 
 test('the ChatGPT widget paints the first result without fetching, opens the same web view, and explicitly saves isolated controls',async()=>{
@@ -41,7 +41,8 @@ test('the ChatGPT widget paints the first result without fetching, opens the sam
   await frame.getByRole('button',{name:'Custom views'}).click();await frame.getByRole('button',{name:'Committee review'}).click()
   const inside=frame.frameLocator('iframe');const field=inside.locator('#committee')
   await field.waitFor();await page.waitForFunction(()=>document.readyState==='complete')
-  await frame.getByRole('button',{name:'Open TrialAgents app'}).click();assert.equal(links[0],url)
+  await frame.getByRole('button',{name:'Open TrialAgents app'}).click()
+  await expect.poll(()=>links[0]).toBe(url)
   await field.fill('Beta');await inside.locator('p').filter({hasText:'Alpha'}).waitFor({state:'hidden',timeout:4000})
   assert.equal(calls.filter(([n])=>n==='save_pipeline_controls').length,0)
   await frame.getByRole('button',{name:'Save control values'}).click();await frame.getByText('Control values saved.').waitFor()
