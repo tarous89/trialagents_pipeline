@@ -1,11 +1,37 @@
 let state, busy=false, sectionData=null, selectedView='', viewSearch='', viewAuthor='', viewProgram='';
 const originalNames={...names};
 const model=()=>[...data,...orgDb.map(r=>({...r,type:'Organization'}))];
-let baselineItems=new Map();
+let baselineItems=new Map(),viewTimer,viewGeneration=0,viewRevision=-1,lastConfirmed='';
+function scheduleViewRefresh(immediate=false){
+ clearTimeout(viewTimer);
+ const generation=++viewGeneration;
+ if(!state||tab!=='Custom views'||document.hidden)return;
+ const workspace=state.workspace;
+ viewTimer=setTimeout(async()=>{
+   try{
+     if(!busy&&!el('drawer').open){
+       const result=await rpc('view.list',{knownRevision:viewRevision});
+       if(generation!==viewGeneration||workspace!==state.workspace||tab!=='Custom views'||busy)return;
+       if(result.views&&JSON.stringify(result.views)!==JSON.stringify(state.views)){
+         state.views=result.views;
+         if(selectedView&&!result.views.some(v=>v.id===selectedView))selectedView='';
+         render();
+       }
+       if(Number.isInteger(result.revision))viewRevision=result.revision;
+     }
+   }catch(error){if(generation===viewGeneration&&immediate)notify(error.message)}
+   finally{if(generation===viewGeneration)scheduleViewRefresh()}
+ },immediate?0:6000);
+}
+document.addEventListener('visibilitychange',()=>scheduleViewRefresh(true));
+window.addEventListener('focus',()=>scheduleViewRefresh(true));
+
 function notify(message){
   const n=el('notice');n.textContent=message;n.hidden=!message;
 }
 function hydrate(snapshot){
+  if(state?.workspace!==snapshot.workspace){viewSearch='';viewAuthor='';viewProgram='';lastConfirmed='';selectedView=''}
+  viewRevision=snapshot.revision;
   state=snapshot;for(const id of Object.keys(names))delete names[id];Object.assign(names,originalNames);
   for(const t of state.tabs)names[t.builtin||'custom-'+t.id]=t.label;
   data=structuredClone(state.items.filter(r=>r.type!=='Organization').map(r=>({...r,start:r.start??'',end:r.end??'',owner:r.owner??''})));
@@ -17,6 +43,13 @@ function hydrate(snapshot){
   const header=el('pipeline-header')?.shadowRoot;
   if(header)header.querySelector('.combined-preview-label').hidden=state.role!=='reader';
 }
+const railToggle=el('pipeline-header')?.shadowRoot?.querySelector('.sidebar-toggle');
+if(railToggle)railToggle.onclick=()=>{
+ const rail=el('rail');rail.hidden=!rail.hidden;
+ railToggle.setAttribute('aria-expanded',String(!rail.hidden));
+ railToggle.title=rail.hidden?'Show sidebar':'Hide sidebar';
+ railToggle.setAttribute('aria-label',railToggle.title);
+};
 async function rpc(op,input={},extra={}){
   const req={op,input,workspace:state?.workspace,revision:state?.revision,requestId:crypto.randomUUID(),...extra};
   return window.pipelineTransport(req);
@@ -27,6 +60,7 @@ async function change(op,input,after){
   try{
     const result=await rpc(op,input);
     await refreshState();
+    lastConfirmed=op==='items.save'?'Saved record changes':op==='examples.remove'?'Removed example records':op==='view.remove'?'Removed a saved view':'';
     if(after)await after(result);
     notify(op==='examples.remove'?(result.kept?'Examples cleared. Records linked to your work were kept.':'Examples removed.'):'Saved');
   }catch(error){
@@ -56,26 +90,25 @@ function assistantSettings() {
 }
 const exampleTabs={
  Overview:['Program','program','Program'],Milestones:['Plan','plan','Program'],Timeline:['Plan','plan','Program'],
- Deliverables:['Deliverable','deliverable','Deliverable'],Risks:['Risk','risk','Risk'],Changes:['Change','change','Change'],Updates:['Digest','updates','Change']
+ Deliverables:['Deliverable','deliverable','Deliverable'],Risks:['Risk','risk','Risk'],Changes:['Change','change','Change']
 };
 function visibleExample(){
  const selection=exampleTabs[tab];
  if(!selection)return null;
  const [scope]=selection;
- const matches=r=>scope==='Program'||scope==='Plan'||(scope==='Digest'?aux(r):r.type===scope);
+ const matches=r=>scope==='Program'||scope==='Plan'||r.type===scope;
  return state.items.some(r=>r.example&&matches(r))?selection:null;
 }
-function exampleCard([scope,label,addType]){
+function exampleCard([scope,label]){
  const whole=scope==='Program'||scope==='Plan';
  const copy=whole?'Remove the fictional EX-101 program and its remaining examples, then add your own program.':
-   scope==='Digest'?'Remove the example deliverable, risk, and change, then add your own updates.':
    'Delete the example '+label+' when you’re ready to add your own.';
- const controls=state.role==='reader'?'':'<div class="example-actions"><button class="primary" data-remove-examples="'+scope+'">Delete example '+label+'</button><button data-first-type="'+addType+'">Add my '+addType.toLowerCase()+'</button></div>';
+ const controls=state.role==='reader'?'':'<div class="example-actions"><button class="primary" data-remove-examples="'+scope+'">Delete example data</button></div>';
  return '<section class="panel empty-panel"><div><h2>Explore the EX-101 example</h2><p>'+copy+'</p></div>'+controls+'</section>';
 }
 function firstItemCard(type, title) {
   const action = state.role === 'reader' ? '<p>An editor can add the first item.</p>' :
-    '<button type="button" class="primary" data-first-type="' + type + '">Add first ' + type.toLowerCase() + '</button>';
+    '<button type="button" class="primary" data-first-type="' + type + '">Add ' + type.toLowerCase() + '</button>';
   return '<section class="panel empty-panel"><h2>' + title + '</h2>' + action + '</section>';
 }
 function decorateWorkspace(){
@@ -98,7 +131,9 @@ function decorateWorkspace(){
     const load=async offset=>{
       const detail=await rpc('assistant.view',{id:view.id,content:true,offset})
       if(plot.isConnected)showBound(plot,detail,{more:load,save:state.role==='reader'?undefined:async draft=>{
-        const receipt=await rpc('assistant.state',{id:view.id,version:detail.version,state:draft});state.revision=receipt.revision;detail.version=receipt.version;notify('Control values saved.')
+        const receipt=await rpc('assistant.state',{id:view.id,version:detail.version,state:draft},{revision:detail.revision});
+        if(state.revision===detail.revision)state.revision=receipt.revision;
+        detail.revision=receipt.revision;detail.version=receipt.version;view.version=receipt.version;lastConfirmed='Saved view controls';notify('Control values saved.')
       }})
     }
     void load(0).catch(e=>{if(plot.isConnected)plot.textContent=e.message})
@@ -129,11 +164,10 @@ function showView(view){
 }
 function customTab(){return showView(state.views.find(v=>v.id===state.tabs.find(t=>'custom-'+t.id===tab)?.view))}
 function viewsPage(){
- const list=state.views.filter(v=>v.title.toLowerCase().includes(viewSearch.toLowerCase())&&(!viewAuthor||v.author===viewAuthor)&&(!viewProgram||v.filters.program===viewProgram));
+ const list=state.views.filter(v=>v.title.toLowerCase().includes(viewSearch.toLowerCase())&&(!viewAuthor||v.author===viewAuthor)&&(!viewProgram||v.filters?.program===viewProgram));
  return '<div class="filters"><label>Search views<input id="view-query" value="'+E(viewSearch)+'"></label><label>Creator<select id="view-author">'+opts([['','All creators'],...new Map(state.views.map(v=>[v.author,[v.author,v.author_name]])).values()],viewAuthor)+'</select></label><label>Program<select id="view-program">'+opts([['','All programs'],...data.filter(r=>r.type==='Program').map(r=>[r.id,r.name])],viewProgram)+'</select></label></div>'+
  panel('Saved views',table(['View','Creator',''],list.map(v=>['<button data-view="'+E(v.id)+'">'+E(v.title)+'</button>',E(v.author_name),(state.role==='owner'||(state.role==='editor'&&state.user.id===v.author))?'<button data-delete-view="'+E(v.id)+'">Remove</button>':'']))+
-   (list.length?'':'<p class="pad">'+(state.views.length?'No views match these filters.':'No saved views yet.')+'</p>'))+
- (state.role==='reader'?'':panel('Create with an assistant','<div class="pad assistant-actions">'+assistantActions('Create with')+'</div>'))+
+   (list.length?'':'<p class="pad">'+(state.views.length?'No views match these filters.':state.role==='reader'?'No saved views yet.':window.pipelineChatGPT?'Ask ChatGPT to create your first custom view.':'Ask ChatGPT or Claude to create your first custom view.')+'</p>'))+
  (selectedView?showView(state.views.find(v=>v.id===selectedView)):'');
 }
 const settingButton=(text,action)=>'<button type="button" data-action="'+action+'">'+text+'</button>';
@@ -187,12 +221,12 @@ document.addEventListener('click',async e=>{
  if(b.dataset.removeExamples&&state.role!=='reader'){
    const example=visibleExample();
    if(example&&b.dataset.removeExamples===example[0]){
+     const originTab=tab;
      const entire=['Program','Plan'].includes(example[0]);
      const choice=entire?'Delete the remaining EX-101 example records?':'Delete example '+example[1]+'?';
      if(await confirmAction(choice+' Your own records and examples they depend on will be kept.'))void change('examples.remove',{scope:example[0]},()=>{
        if(filters.program&&!get(filters.program))delete filters.program;
-       if(digestProgram&&!get(digestProgram))digestProgram='';
-       render();
+       if(state.role!=='reader'&&tab===originTab)editor('','',example[2]);
      });
    }
  }
@@ -239,6 +273,8 @@ window.pipelineLocation=()=>{
  else if(tab==='Settings')url.searchParams.set('section',settingTab);
  else url.searchParams.set('tab',tab);
  if(el('drawer').open&&editing&&el('editform')&&get(editing))url.searchParams.set('record',editing);
+ const readOnlyRecord=el('drawer').querySelector('[data-saved-record]')?.dataset.savedRecord;
+ if(el('drawer').open&&readOnlyRecord)url.searchParams.set('record',readOnlyRecord);
  const focused=el('app').querySelector('.selected-record [data-open]');
  if(!el('drawer').open&&focused)url.searchParams.set('record',focused.dataset.open);
  const linked=el('linked-table');
@@ -250,13 +286,14 @@ window.pipelineMount=async(snapshot,search=new URLSearchParams(location.search))
   if(el('drawer').open)el('drawer').close();
   tab='Overview';filters={};selectedView='';sectionData=null;editing='';returnTo=null;expanded.clear();sectionLoad++;
  }
- hydrate(snapshot);mountPlan();
+ hydrate(snapshot);mountPlan();scheduleViewRefresh(true);
  const record=search.get('record'),view=search.get('view');
  let selected=search.get('tab');
+ if(['Updates','Digest'].includes(selected))selected='Overview';
  if(selected==='Overview'&&!record)selected=({Milestone:'Milestones',Activity:'Milestones',Decision:'Milestones',Deliverable:'Deliverables',Change:'Changes',Risk:'Risks'})[search.get('table')]||selected;
- if(selected&&Object.hasOwn(names,selected)&&selected!=='Settings')go(selected);
+ if(selected&&(tabs.includes(selected)||Object.hasOwn(names,selected))&&selected!=='Settings')go(selected);
  if(record&&get(record))openItem(record);
- else if(search.get('table')&&(record||!Object.hasOwn(names,selected)||!['Program','Milestone','Activity','Decision','Deliverable','Change','Risk'].includes(search.get('table')))){
+ else if(search.get('table')&&(record||!(tabs.includes(selected)||Object.hasOwn(names,selected))||!['Program','Milestone','Activity','Decision','Deliverable','Change','Risk'].includes(search.get('table')))){
    const tableId=search.get('table');
    const showPage=async(offset=0)=>{
      const page=await rpc('assistant.read',{table:tableId,id:record,offset});
@@ -274,7 +311,7 @@ window.pipelineMount=async(snapshot,search=new URLSearchParams(location.search))
   try{const pending=JSON.parse(sessionStorage.getItem('pipeline-draft-invite'));if(pending?.workspace===state.workspace&&el('invite')){el('invite').elements.email.value=pending.email;el('invite').elements.role.value=pending.role;sessionStorage.removeItem('pipeline-draft-invite')}}catch{}
  }
 };
-window.pipelineOpenView=id=>{if(state.views.some(v=>v.id===id)){selectedView=id;go('Custom views')}};
+window.pipelineOpenView=id=>{if(state.views.some(v=>v.id===id)){viewSearch='';viewAuthor='';viewProgram='';selectedView=id;go('Custom views')}};
 
 function confirmAction(message){
  const dialog=document.createElement('dialog'),text=document.createElement('p'),cancel=document.createElement('button'),accept=document.createElement('button')

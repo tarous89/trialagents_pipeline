@@ -18,15 +18,14 @@ const main=await bundle(common+'\n'+await read('app/web/browser.js'))
 await writeFile('dist/pipeline.js',main);await writeFile('dist/pipeline.html',shell)
 if(process.argv.includes('--widget')){
  const embedded=await bundle(common+'\n'+await read('app/web/embedded.js'))
- const embeddedShell=shell.replace('</style>',(await read('app/web/chatgpt-sidebar.css'))+'</style>')
  await writeFile('dist/pipeline-embedded.js',embedded)
- await writeFile('dist/pipeline-embedded.html',embeddedShell.replace('/pipeline-assets/pipeline.js','/pipeline-assets/pipeline-embedded.js'))
+ await writeFile('dist/pipeline-embedded.html',shell.replace('/pipeline-assets/pipeline.js','/pipeline-assets/pipeline-embedded.js'))
  const chat=(await build({entryPoints:['app/web/chatgpt.js'],bundle:true,minify:true,write:false,format:'iife',target:'es2022'})).outputFiles[0].text
  await writeFile('dist/pipeline-chatgpt.html',(await read('app/web/chatgpt.html')).replace('</body>',()=>'<script>'+chat.replace(/<\/script/gi,'<\\/script')+'</script></body>'))
  const bridge=(await build({entryPoints:['app/web/host.js'],bundle:true,minify:true,write:false,format:'iife',target:'es2022'})).outputFiles[0].text
  const widget=(await bundle(common))+'\n'+bridge
  const widgetShell=shell.replace('combined-workspace combined-public-shell">','combined-workspace combined-public-shell combined-plugin-shell combined-extension-surface">')
-   .replace('<h1 class="workspaceTitle">TrialAgents Pipeline</h1>','<h1 class="workspaceTitle"><button type="button" class="workspace-brand" aria-label="Open TrialAgents Pipeline"><img src="https://intel.trialagents.com/trialagents-mark-white.png" width="28" height="28" alt=""><span>TrialAgents Pipeline</span></button></h1>')
+   .replace(/<img class="pipeline-mark"[^>]*><h1 class="workspaceTitle">([^<]*<span class="brand-dot"[^>]*>•<\/span> Pipeline)<\/h1>/, '<h1 class="workspaceTitle"><button type="button" class="workspace-brand" aria-label="Open TrialAgents Pipeline"><img src="https://intel.trialagents.com/trialagents-mark-white.png" width="28" height="28" alt=""><span>$1</span></button></h1>')
    .replace('.intel-app{min-height:0}',(await read('app/web/extension-header.css'))+'\n.intel-app{min-height:0}')
  await writeFile('dist/pipeline-widget.html',widgetShell.replace('<script src="/pipeline-assets/pipeline.js"></script>',()=>'<script>'+widget.replace(/<\/script/gi,'<\\/script')+'</script>'))
 }

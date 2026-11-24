@@ -11,28 +11,6 @@ openApp.className='assistant-link'
 openApp.textContent='Open TrialAgents app ↗'
 actions.replaceChildren(openApp)
 
-const rail=el('rail')
-const toggle=document.createElement('button')
-toggle.type='button'
-toggle.className='sidebar-toggle'
-toggle.setAttribute('aria-controls','rail')
-toggle.innerHTML='<svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>'
-const style=document.createElement('style')
-style.textContent='.sidebar-toggle{display:inline-grid;place-items:center;flex:none;width:32px;height:32px;padding:0;border:0;border-radius:6px;color:inherit;background:transparent;cursor:pointer}.sidebar-toggle:hover{background:#ffffff18}.sidebar-toggle:focus-visible,.assistant-link:focus-visible{outline:2px solid #b1e3c4;outline-offset:2px}'
-header.append(style)
-header.querySelector('.pipeline-mark').after(toggle)
-function setRail(open){
- rail.hidden=!open
- const label=open?'Hide sidebar':'Show sidebar'
- toggle.setAttribute('aria-expanded',String(open))
- toggle.setAttribute('aria-label',label)
- toggle.title=label
-}
-const compact=matchMedia('(max-width:800px)')
-let railOverride=false
-setRail(!compact.matches)
-compact.addEventListener('change',()=>{if(!railOverride)setRail(!compact.matches)})
-toggle.onclick=()=>{railOverride=true;setRail(rail.hidden)}
 window.pipelineLink=async raw=>{
  const url=new URL(raw)
  if(url.origin!==appOrigin)throw Error('Invalid workspace link')
@@ -77,9 +55,50 @@ window.pipelineTransport=async request=>{
  if(!res.ok)throw Error(result.error||'Pipeline request failed')
  return result
 }
+// A host request or an explicit click can read this frame's saved selection.
+async function currentSelection(){
+ if(!state||mounting)throw Error('The workspace is still opening.');
+ const workspace=state.workspace,url=window.pipelineLocation(),params=new URL(url).searchParams;
+ const currentTab=tab,view=params.get('view'),record=params.get('record');
+ const context={workspace,tab:names[tab]||tab};
+ const activeFilters=Object.fromEntries(Object.entries(filters).filter(([k,v])=>k!=='search'&&v));
+ if(tab==='Custom views'&&viewProgram)activeFilters.program=viewProgram;
+ if(Object.keys(activeFilters).length)context.filters=activeFilters;
+ if(tab==='Settings')context.section=settingTab;
+ if(lastConfirmed)context.lastAction=lastConfirmed;
+ const access=await rpc('view.list',{knownRevision:view?-1:viewRevision});
+ if(view){
+   const v=access.views?.find(v=>v.id===view);
+   context.view=v?{id:v.id,title:v.title}:'Selection unavailable';
+ }
+ if(record){
+   const table=params.get('table')||get(record)?.type;
+   const detail=table?await rpc('assistant.read',{table,id:record,fields:['name']}):null;
+   const r=detail?.records?.[0];context.record=r?{id:r.id,table,name:r.values?.name}:'Selection unavailable';
+ }
+ if(state.workspace!==workspace||mounting||tab!==currentTab||window.pipelineLocation()!==url)throw Error('The selection changed. Ask again.');
+ return context;
+}
+let sending=false,mounting=false;
+document.addEventListener('click',async e=>{
+ const button=e.target.closest('[data-ask-view],[data-share-context]');if(!button||sending)return;
+ const create=button.hasAttribute('data-ask-view');if(create&&state.role==='reader')return;
+ sending=true;button.disabled=true;
+ let prompt='';
+ try{
+   const context=await currentSelection();
+   prompt=(create?'Please create and save a new custom view in this Pipeline workspace. Ask me what it should show if needed.':'Here is my current Pipeline view.')+' Workspace context: '+JSON.stringify(context);
+   await hostRequest('send-message',{prompt});
+ }catch(error){
+   if(prompt){
+     present('<h2>Copy message to ChatGPT</h2><p>The message could not be sent from this workspace.</p><textarea readonly aria-label="Message to copy">'+E(prompt)+'</textarea><button data-close>Close</button>');
+     el('drawer').querySelector('textarea').select();
+   }else notify(error.message);
+ }finally{sending=false;button.disabled=false}
+});
 let generation=0
 async function showTarget({workspace,url}){
- const seq=++generation
+ const seq=++generation;mounting=true
  try{
    const target=new URL(url)
    if(target.origin!==appOrigin||target.searchParams.get('workspace')!==workspace)throw Error('Invalid workspace link')
@@ -89,11 +108,15 @@ async function showTarget({workspace,url}){
    if(seq!==generation)return
    const msg=document.createElement('p'),retry=document.createElement('button')
    msg.textContent=e.message;retry.textContent='Retry workspace';retry.onclick=()=>showTarget({workspace,url})
-   el('app').replaceChildren(msg,retry)
- }
+   el('app').replaceChildren(msg,retry);state=null
+ }finally{if(seq===generation)mounting=false}
 }
 bridge.port1.onmessage=({data})=>{
  if(data.type==='target'){void showTarget(data);return}
+ if(data.type==='read-context'){
+   currentSelection().then(context=>bridge.port1.postMessage({type:'selection',id:data.id,context}),()=>bridge.port1.postMessage({type:'selection',id:data.id,error:'Selection unavailable; reopen the workspace.'}));
+   return;
+ }
  const finish=waiting.get(data.id);if(finish){waiting.delete(data.id);finish(data)}
 }
 if(window.parent!==window)window.parent.postMessage({type:'pipeline-ready'},'*',[bridge.port2])

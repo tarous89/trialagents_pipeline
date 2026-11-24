@@ -1,12 +1,26 @@
 import {App} from '@modelcontextprotocol/ext-apps'
 const origin='https://pipeline.trialagents.com'
-const app=new App({name:'TrialAgents Pipeline',version:'0.3.0'},{availableDisplayModes:['inline','fullscreen']},{autoResize:false})
+const app=new App({name:'TrialAgents Pipeline',version:'0.4.0'},{tools:{},availableDisplayModes:['inline','fullscreen']},{autoResize:false})
 const status=document.querySelector('main')
 let frame,port,target
 async function tool(name,args){
  const reply=await app.callServerTool({name,arguments:args})
  if(reply.isError)throw Error(reply.content?.find(c=>c.type==='text')?.text||'Workspace request failed')
  return reply._meta?.pipeline??reply.structuredContent?.result
+}
+const selectionRequests=new Map()
+app.onlisttools=async()=>({tools:[{name:'read_current_pipeline_view',description:'Read the saved selection in this open workspace only when the user asks what they are viewing.',inputSchema:{type:'object',properties:{},additionalProperties:false},annotations:{readOnlyHint:true}}]})
+app.oncalltool=async({name})=>{
+ if(name!=='read_current_pipeline_view'||!frame||!port)return {isError:true,content:[{type:'text',text:'No active Pipeline workspace.'}]}
+ const id=crypto.randomUUID(),channel=port
+ return new Promise(resolve=>{
+   const timer=setTimeout(()=>finish(null),5000)
+   function finish(context){
+     clearTimeout(timer);selectionRequests.delete(id)
+     resolve(context&&channel===port?{content:[{type:'text',text:JSON.stringify(context)}]}:{isError:true,content:[{type:'text',text:'Current selection unavailable. Use Share current view in the workspace.'}]})
+   }
+   selectionRequests.set(id,finish);channel.postMessage({type:'read-context',id})
+ })
 }
 function showError(message,label,retry){
  frame?.remove();frame=null;port?.close();port=null
@@ -18,7 +32,10 @@ function showError(message,label,retry){
 function route(next){
  target=next
  if(next.pending){showError('The view save could not be verified.','Retry save',async()=>route(await tool('retry_pipeline_view',{workspace:next.workspace,request_id:next.request_id})));return}
- if(next.reopen){showError('Your view was saved.','Open saved view',async()=>route(await tool('open_pipeline',{workspace:next.workspace,view:next.id})));return}
+ if(next.reopen){
+   const retry=async()=>route(await tool('open_pipeline',{workspace:next.workspace,view:next.id}))
+   void retry().catch(()=>showError('Your view was saved.','Open saved view',retry));return
+ }
  if(frame){sendTarget();return}
  frame=document.createElement('iframe')
  frame.title='TrialAgents Pipeline workspace'
@@ -36,7 +53,12 @@ window.addEventListener('message',event=>{
  const channel=event.ports[0];port=channel
  channel.onmessage=async({data})=>{
    try{
-     if(data.type==='authorize'){
+     if(data.type==='selection'){selectionRequests.get(data.id)?.(data.context);return}
+     if(data.type==='send-message'){
+       const content=[{type:'text',text:data.prompt}]
+       const result=await app.sendMessage({role:'user',content})
+       if(result?.isError)throw Error('Message declined')
+     }else if(data.type==='authorize'){
        await tool('connect_pipeline_frame',{workspace:data.workspace,challenge:data.challenge})
      }else if(data.type==='open-link'){
        const url=new URL(data.url)

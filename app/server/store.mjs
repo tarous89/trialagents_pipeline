@@ -29,6 +29,7 @@ async function membership(q,w,u,lock=false){
   check(uuid(w),'Invalid workspace')
   const m=await one(q,sqlMember+(lock?' FOR UPDATE OF w':''),[w,u.id])
   check(m && (m.role==='owner'||paid(m)),'Workspace access unavailable',403)
+  m.tabs=m.tabs.filter(t=>!['Updates','Digest'].includes(t.builtin))
   return m
 }
 async function ensureHome(q,u){
@@ -43,7 +44,10 @@ async function ensureHome(q,u){
   return inserted?.id??(await one(q,'SELECT id FROM pipeline.workspace WHERE owner_id=$1',[u.id])).id
 }
 async function viewList(q,w){
-  return q('SELECT id,title,filters,chart,(length(presentation)>0 OR spec IS NOT NULL) AS rich,(spec IS NOT NULL) AS bound,author,author_name,created_at FROM pipeline.view WHERE workspace_id=$1 ORDER BY created_at DESC,id',[w])
+  return q(`SELECT id,title,version,filters || CASE WHEN spec->'query'->>'program' IS NULL THEN '{}'::jsonb
+    ELSE jsonb_build_object('program',spec->'query'->>'program') END AS filters,chart,
+    (length(presentation)>0 OR spec IS NOT NULL) AS rich,(spec IS NOT NULL) AS bound,author,author_name,created_at
+    FROM pipeline.view WHERE workspace_id=$1 ORDER BY created_at DESC,id`,[w])
 }
 const writeOps=new Set(['examples.remove','items.save','settings.save','preferences.save','view.save','view.remove','design.save','team.invite','team.revoke','team.member'])
 const ownerOps=new Set(['settings.save','design.save','team.invite','team.revoke','team.member','team.list','billing.checkout','billing.portal'])
@@ -118,13 +122,13 @@ export function pipeline(db,{origin='https://pipeline.trialagents.com',billing}=
           case 'assistant.prepare':return prepareView(q,m,input)
           case 'assistant.design':return {title:assistantTitle(m,user),tabs:m.tabs,accent:m.accent,revision:m.revision}
           case 'assistant.open':{
-            const tab=input.tab||'Overview'
+            const tab=['Updates','Digest'].includes(input.tab)?'Overview':input.tab||'Overview'
             const base={workspace:w,role:m.role,revision:m.revision,tab,accent:m.accent,canInvite:m.role==='owner'&&Boolean(paid(m)),title:assistantTitle(m,user),tabs:m.tabs}
             if(input.view)return {...base,url:link(w,{view:input.view}),view:await readView(q,m,{id:input.view,content:true})}
             if(tab==='Custom views')return {...base,url:link(w,{tab}),...await listViews(q,m,input)}
             const plans=['Program','Milestone','Activity','Decision']
-            const defaults={Timeline:{table:'Activity',kinds:plans,fields:['name','start','end','status'],order:'start'},Milestones:{table:'Milestone',kinds:plans,fields:['name','end','status','risk'],order:'end'},Updates:{table:'Change',kinds:['Change','Deliverable','Risk'],fields:['name','end','status'],order:'end',descending:true}}
-            const query=input.query??defaults[tab]??{table:({Milestones:'Milestone',Timeline:'Activity',Deliverables:'Deliverable',Risks:'Risk',Changes:'Change',Updates:'Decision'})[tab]||'Program'}
+            const defaults={Timeline:{table:'Activity',kinds:plans,fields:['name','start','end','status'],order:'start'},Milestones:{table:'Milestone',kinds:plans,fields:['name','end','status','risk'],order:'end'}}
+            const query=input.query??defaults[tab]??{table:({Milestones:'Milestone',Timeline:'Activity',Deliverables:'Deliverable',Risks:'Risk',Changes:'Change'})[tab]||'Program'}
             return {...base,url:link(w,{tab,...input.query?.table&&{table:query.table},...query.id&&{record:query.id}}),data:await readRows(q,m,query)}
           }
           case 'bootstrap': {
@@ -153,7 +157,7 @@ export function pipeline(db,{origin='https://pipeline.trialagents.com',billing}=
             const view=await one(q,'SELECT id,title,filters,chart,presentation FROM pipeline.view WHERE workspace_id=$1 AND id=$2',[w,input.id])
             check(view,'View unavailable',404);return view
           }
-          case 'view.list':return {views:await viewList(q,w)}
+          case 'view.list':return input.knownRevision===m.revision?{revision:m.revision}:{revision:m.revision,views:await viewList(q,w)}
           case 'logs':{
             const before=String(input.before||'9223372036854775807');const query=String(input.search??'').trim().slice(0,200)
             check(/^\d{1,19}$/.test(before),'Invalid cursor')
@@ -218,7 +222,7 @@ export function pipeline(db,{origin='https://pipeline.trialagents.com',billing}=
           const views=await viewList(q,w),ids=new Set()
           for(const t of input.tabs){
             const id=t.builtin||t.id
-            const valid=t.builtin?['Overview','Milestones','Timeline','Deliverables','Risks','Changes','Updates','Custom views'].includes(t.builtin):uuid(t.id)&&views.some(v=>v.id===t.view)
+            const valid=t.builtin?['Overview','Milestones','Timeline','Deliverables','Risks','Changes','Custom views'].includes(t.builtin):uuid(t.id)&&views.some(v=>v.id===t.view)
             check(valid&&!ids.has(id)&&title(t.label),'Invalid tab');ids.add(id)
           }
           await q('UPDATE pipeline.workspace SET title=$2,accent=$3,tabs=$4 WHERE id=$1',[w,input.title,input.accent,json(input.tabs)])

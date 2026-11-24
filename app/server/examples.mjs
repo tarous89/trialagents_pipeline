@@ -34,16 +34,21 @@ export function examplePortfolio(now=new Date()){
   return records
 }
 
-const events=['Deliverable','Risk','Change']
-const scopes={Program:[...types,'Organization'],Plan:[...types,'Organization'],Digest:events,
+const scopes={Program:[...types,'Organization'],Plan:[...types,'Organization'],
   Deliverable:['Deliverable'],Risk:['Risk'],Change:['Change']}
 export async function removeExamples(q,workspace,scope){
   check(typeof scope==='string'&&Object.hasOwn(scopes,scope),'Unknown example selection')
   const rows=await q('SELECT id,'+itemBody+' AS body FROM pipeline.item WHERE workspace_id=$1',[workspace])
   const candidates=new Map(rows.filter(({body})=>body.example===true&&scopes[scope].includes(body.type)).map(({id,body})=>[id,body]))
   // Preserve references from surviving records and saved views, including indirect dependencies.
-  const views=await q("SELECT filters->>'program' AS program FROM pipeline.view WHERE workspace_id=$1",[workspace])
-  const keep=new Set(),pending=views.map(v=>v.program)
+  const views=await q('SELECT filters,spec FROM pipeline.view WHERE workspace_id=$1',[workspace])
+  const links=await q('SELECT from_id,to_id FROM pipeline.link WHERE workspace_id=$1',[workspace])
+  const keep=new Set(),pending=links.flatMap(l=>[l.from_id,l.to_id])
+  for(const {filters,spec} of views){
+    const query=spec?.query
+    pending.push(filters?.program,query?.program,query?.id)
+    for(const c of query?.conditions??[])pending.push(c.value)
+  }
   function references(r){
     pending.push(...(r.parents??[]),...(r.deps??[]).map(d=>d.id),...(r.related??[]),...(r.orgIds??[]),...Object.keys(r.forecasts??{}))
   }

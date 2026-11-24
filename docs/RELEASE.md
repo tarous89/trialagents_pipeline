@@ -44,7 +44,7 @@ The existing Claude plugin material is retained. This release changes the ChatGP
 
 ## ChatGPT workspace rendering
 
-The browser and embedded builds share the Pipeline shell, styles, navigation, planner, record drawers and saved-view renderer. The embedded header opens the current web workspace and adds a keyboard-accessible sidebar toggle beside the logo. The sidebar starts closed at widths up to 800 px. Personal and Support use the standalone account component. Account security and billing administration take place on the website.
+The browser and embedded builds share the Pipeline shell, styles, navigation, planner, record drawers and saved-view renderer. Both headers place the sidebar toggle before the brand. The sidebar starts open, with a compact rail at narrow widths. The embedded header opens the current web workspace. The component can supply the current saved selection when asked. Share current view and Ask ChatGPT to create a custom view send explicit messages. Personal and Support use the standalone account component. Account security and billing administration take place on the website.
 
 The MCP component frames the app at `https://pipeline.trialagents.com/pipeline-embedded`. This keeps portfolio and account data on the first-party origin. The model receives the scoped tool projection. The frame creates a random secret in memory and sends its SHA-256 digest to the app-only `connect_pipeline_frame` tool. The first-party API verifies the corresponding grant, workspace, current membership and unrevoked OAuth token on use. The frame can renew a ten-minute grant while the OAuth connection remains valid. The renderer for authored content stays on the same allowlisted origin in its own isolated sandbox.
 

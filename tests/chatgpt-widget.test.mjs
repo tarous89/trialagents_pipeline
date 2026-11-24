@@ -29,13 +29,17 @@ test('the connected workspace uses the standalone layout, edits records, links t
  const open=await invoke('open_pipeline',{workspace},server)
  const source=await build({stdin:{resolveDir:process.cwd(),contents:`
  import {AppBridge,PostMessageTransport} from '@modelcontextprotocol/ext-apps/app-bridge';
- const iframe=document.querySelector('iframe'),bridge=new AppBridge(null,{name:'test',version:'1'},{serverTools:{},openLinks:{}});
+ const iframe=document.querySelector('iframe'),bridge=new AppBridge(null,{name:'test',version:'1'},{serverTools:{},openLinks:{},message:{text:{}}});
  bridge.oncalltool=p=>window.dispatch(p);bridge.onopenlink=p=>window.opened(p.url).then(()=>({}));
+ bridge.onmessage=p=>window.sent(p).then(()=>({}));
+ window.getSelectionFromApp=()=>bridge.callTool({name:'read_current_pipeline_view',arguments:{}});
  bridge.oninitialized=()=>bridge.sendToolResult(${JSON.stringify(open)});
  bridge.connect(new PostMessageTransport(iframe.contentWindow,iframe.contentWindow)).then(()=>iframe.src='/widget');`},bundle:true,write:false,format:'iife'})
  const browser=await chromium.launch({executablePath:await headless.executablePath(),args:headless.args.filter(arg=>arg!=='--disable-web-security')})
  t.after(()=>browser.close())
  const page=await browser.newPage({viewport:{width:1150,height:850}}),links=[],calls=[],errors=[]
+ const messages=[]
+ await page.exposeFunction('sent',p=>messages.push(p))
  page.on('pageerror',e=>errors.push(e.message))
  await page.exposeFunction('opened',u=>links.push(u))
  await page.exposeFunction('dispatch',async({name,arguments:args})=>{
@@ -77,26 +81,46 @@ test('the connected workspace uses the standalone layout, edits records, links t
  await standalone.getByRole('heading',{name:'Pipeline Overview'}).waitFor()
  assert.deepEqual(calls,['connect_pipeline_frame'])
  assert.equal(requests[0].op,'bootstrap')
- for(const tab of ['Overview','Milestones','Timeline','Deliverables','Risks','Changes','Updates','Custom views']){
+ for(const tab of ['Overview','Milestones','Timeline','Deliverables','Risks','Changes']){
    await frame.locator('[data-tab="'+tab+'"]').click()
    await standalone.locator('[data-tab="'+tab+'"]').click()
    assert.equal(await frame.locator('#app').innerText(),await standalone.locator('#app').innerText(),tab)
  }
  await frame.locator('[data-tab="Overview"]').click()
  await standalone.locator('[data-tab="Overview"]').click()
+ for(const surface of [frame,standalone]){
+   await surface.locator('[data-tab="Milestones"]').click()
+   assert.equal(await surface.locator('.program-head h2').first().evaluate(e=>getComputedStyle(e).fontWeight),'700')
+   assert.equal(await surface.locator('select[data-filter=program] option').last().evaluate(e=>getComputedStyle(e).fontWeight),'400')
+   await surface.locator('[data-tab="Timeline"]').click()
+   assert.equal(await surface.locator('.program-head h2').first().evaluate(e=>getComputedStyle(e).fontWeight),'700')
+   await surface.locator('[data-tab="Settings"]').click()
+   await surface.locator('[data-settings-section="Notifications"]').click()
+   assert.equal(await surface.locator('.mail-pref strong').first().evaluate(e=>getComputedStyle(e).fontWeight),'400')
+   assert.equal(await surface.locator('.mail-pref').count(),6)
+   assert.equal(await surface.locator('.settings-page').evaluate(e=>Math.round(e.getBoundingClientRect().left)),await surface.locator('.title').evaluate(e=>Math.round(e.getBoundingClientRect().left)))
+   await surface.locator('[data-tab="Overview"]').click()
+ }
  assert.deepEqual(await frame.locator('#app').screenshot(),await standalone.locator('#app').screenshot())
  await frame.getByRole('button',{name:'Hide sidebar'}).click()
  await expect(frame.locator('#rail')).toBeHidden()
  await frame.getByRole('button',{name:'Show sidebar'}).press('Enter')
  await expect(frame.locator('#rail')).toBeVisible()
- await frame.locator('[data-add]').click()
- await frame.locator('[data-new="Program"]').click()
+ assert.equal(await frame.locator('.example-label,[data-tab="Updates"],[data-add]').count(),0)
+ await frame.getByRole('button',{name:'Delete example data'}).click()
+ await frame.getByRole('button',{name:'Confirm',exact:true}).click()
  await frame.locator('[name="recordName"]').fill('UI parity test')
  await frame.locator('#editform [type=submit]').click()
  await frame.getByText('Saved',{exact:true}).waitFor()
  assert.equal((await run(user,{op:'bootstrap',workspace})).items.filter(r=>r.name==='UI parity test').length,1)
  await frame.locator('[data-tab="Custom views"]').click()
  await frame.locator('[data-view="'+id+'"]').click()
+ assert.equal(messages.length,0)
+ await frame.getByRole('button',{name:'Ask ChatGPT to create a custom view'}).click()
+ await expect.poll(()=>messages.length).toBe(1)
+ assert.match(messages[0].content[0].text,/create and save a new custom view/)
+ const context=await page.evaluate(()=>window.getSelectionFromApp())
+ assert.equal(JSON.parse(context.content[0].text).view.id,id)
  const inside=frame.frameLocator('#view-plot iframe')
  await inside.locator('#committee').fill('Beta')
  await inside.locator('p').filter({hasText:'Alpha'}).waitFor({state:'hidden'})
@@ -108,9 +132,10 @@ test('the connected workspace uses the standalone layout, edits records, links t
  assert.equal((await run(user,{op:'assistant.view',workspace,input:{id,content:true}})).state.committee,'Beta')
  await page.setViewportSize({width:390,height:810});await page.reload()
  await frame.getByRole('heading',{name:'Pipeline Overview'}).waitFor()
+ await expect(frame.locator('#rail')).toBeVisible()
+ await frame.getByRole('button',{name:'Hide sidebar'}).press('Space')
  await expect(frame.locator('#rail')).toBeHidden()
- const toggle=frame.getByRole('button',{name:'Show sidebar'})
- await toggle.press('Space')
+ await frame.getByRole('button',{name:'Show sidebar'}).press('Space')
  await frame.locator('[data-tab="Timeline"]').click()
  await frame.locator('.program-head').filter({hasText:'UI parity test'}).waitFor()
  const captured=requests.at(-1).headers

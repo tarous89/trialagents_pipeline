@@ -14,10 +14,10 @@ test('authenticated browser opens empty, saves a record and renders every sectio
  return {ok:true,json:async()=>r.op==='bootstrap'?structuredClone(snap):r.op==='team.list'?{members:[],invitations:[]}:r.op==='logs'?{entries:[]}:{}}
  }
  w.eval(script);const tick=()=>new Promise(r=>setTimeout(r,15));await tick()
- assert.equal(d.querySelectorAll('#rail [data-tab]').length,9);assert.doesNotMatch(d.querySelector('main').textContent,/NorthTherapeutics|Maya Chen/)
+ assert.equal(d.querySelectorAll('#rail [data-tab]').length,8);assert.doesNotMatch(d.querySelector('main').textContent,/NorthTherapeutics|Maya Chen/)
  assert.equal(d.querySelector('.sidebar-identity small').textContent,snap.user.email)
  assert(d.querySelector('[data-first-type="Program"]'))
- d.querySelector('[data-add]').click();d.querySelector('[data-new="Program"]').click();const form=d.querySelector('#editform');assert(form)
+ assert.equal(d.querySelector('[data-add]'),null);d.querySelector('[data-first-type="Program"]').click();const form=d.querySelector('#editform');assert(form)
  form.elements.recordName.value='First program';form.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await tick()
  assert.equal(ops.filter(r=>r.op==='items.save').length,1);assert.equal(snap.items[0].name,'First program')
  for(const b of [...d.querySelectorAll('#rail [data-tab]')]){d.querySelector('#rail [data-tab="'+b.dataset.tab+'"]').click();await tick()}

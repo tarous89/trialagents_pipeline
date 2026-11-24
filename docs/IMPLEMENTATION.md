@@ -2,7 +2,7 @@
 
 ## Product and release boundary
 
-A biotech team owns a shared pipeline at pipeline.trialagents.com. A member can plan in the browser, ask an assistant what changed, open the same filtered workspace in ChatGPT or Claude, and edit within their role. The browser, MCP tools and embedded interface use the same records and operations. The public repository holds source and fictional fixtures. Start production workspaces empty. Preserve the approved planning experience in prototypes/pipeline/Pipeline.html. Use the accompanying prototypes/pipeline/README.md as the authoritative workflow specification. The older Platform Programs catalog version provides integration history.
+A biotech team owns a shared pipeline at pipeline.trialagents.com. A member can plan in the browser, ask an assistant what changed, open the same filtered workspace in ChatGPT or Claude, and edit within their role. The browser, MCP tools and embedded interface use the same records and operations. The public repository holds source and fictional fixtures. New workspaces start with removable EX-101 examples. Onboarding offers one action on each page and opens the corresponding record form after cleanup. Preserve the approved planning experience in prototypes/pipeline/Pipeline.html. Use the accompanying prototypes/pipeline/README.md as the authoritative workflow specification. The older Platform Programs catalog version provides integration history.
 
 The first release includes the full planning workspace, team accounts, paid collaboration, shared custom views, owner customization, personal preferences, notifications, support, billing and audit history. Launch includes a public app submission for each assistant. Directory approval and private-connector verification are distinct milestones.
 
@@ -14,7 +14,6 @@ The first release includes the full planning workspace, team accounts, paid coll
 | Programs | Program cards contain milestones, activities and decisions. Preserve stable program identity when assets or indications repeat. Maintain autocomplete, parent/child membership, optional sequencing rules, decision outcomes, cycle validation and the edit drawer. |
 | Timeline | Expandable program cards, activity spans, milestone markers and decision points. Filter by program, status and dates. Retain marker spacing for first and last dates. |
 | Deliverables, Risks, Changes | Linked records retain affected items, owners, organizations and dates. Keep risk propagation to affected activities and their parents. Manage contact people on organization records. |
-| Digest | Filter weekly/monthly and program summaries. Render from the same records and activity history. Save notification preferences independently. |
 | Custom views | One searchable, filterable list. Filter by program, author and view type. Open an item in place or via a stable workspace link. Preserve Intel's chart frames, summary, save verification and recovery flow. |
 | Settings | Single navigation entry. The seven sections below share Intel's settings controls. |
 

@@ -1,3 +1,0 @@
-/* Keep the standalone grid and its responsive rail until the user folds it. */
-.layout:has(> #rail[hidden]){grid-template-columns:minmax(0,1fr);margin-bottom:0}
-#rail[hidden]{display:none}
