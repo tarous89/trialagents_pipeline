@@ -52,7 +52,7 @@ test('standalone shared-web MCP authenticates the exact audience and runs the co
  const retry=(await call('retry_pipeline_view',{workspace,request_id}))._meta.pipeline
  assert.deepEqual(retry.receipt,saved.receipt);assert.equal((await result('list_pipeline_views',{workspace})).views.length,1)
  const ui=(await rpc('resources/read',{uri:widgetUri})).contents[0]
- assert.equal(ui._meta.ui.csp.frameDomains[0],'https://pipeline.trialagents.com');assert.match(ui.text,/Open TrialAgents app/)
+ assert.equal(ui._meta.ui.csp.frameDomains[0],'https://pipeline.trialagents.com');assert.match(ui.text,/pipeline-embedded/)
  const read = query => result('read_pipeline', {workspace,query})
  async function seed(table, name, fields=['name']) {
    const page=await read({table,search:name,fields})

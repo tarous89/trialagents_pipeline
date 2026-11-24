@@ -81,12 +81,12 @@ function firstItemCard(type, title) {
 function decorateWorkspace(){
   if(!state)return;
   const actions=el('pipeline-header')?.shadowRoot?.querySelector('.assistant-actions');
-  if(actions)into(actions).html=assistantActions('Open in');
+  if(actions&&!window.pipelineChatGPT)into(actions).html=assistantActions('Open in');
   const holder=el('account-holder');
   if(holder){
     const frame=document.createElement('iframe');
     frame.className='account-frame';frame.title=settingTab;
-    frame.src='/pipeline-account?tab='+(settingTab==='Support'?'support':'account');
+    frame.src='/pipeline-account?tab='+(settingTab==='Support'?'support':'account')+(window.pipelineChatGPT?'&surface=chatgpt':'');
     frame.addEventListener('load',()=>fitFrame(frame,'.pipeline-account'));
     holder.append(frame);
   }
@@ -139,7 +139,7 @@ function viewsPage(){
 const settingButton=(text,action)=>'<button type="button" data-action="'+action+'">'+text+'</button>';
 function settingsPage(){
  const owner=state.role==='owner';
- const sections=settingsSections.filter(n=>owner||!['Billing','Team'].includes(n));
+ const sections=settingsSections.filter(n=>(owner||!['Billing','Team'].includes(n))&&(!window.pipelineChatGPT||n!=='Billing'));
  if(!sections.includes(settingTab))settingTab=sections[0];
  const menu='<div class="pipeline-settings"><nav class="settings-tabs" aria-label="Settings sections">'+sections.map(n=>'<button type="button" data-settings-section="'+n+'" aria-pressed="'+(settingTab===n)+'" class="'+(settingTab===n?'active':'')+'">'+sectionIcons[n]+n+'</button>').join('')+'</nav></div>';
  let body='';
@@ -147,7 +147,7 @@ function settingsPage(){
  if(settingTab==='App')body+=assistantSettings();
  if(settingTab==='Personal'||settingTab==='Support'){
    const part=settingTab==='Support'?'support':'account';
-   body=window.pipelineHost?panel(E(settingTab),'<button class="pad" data-external="/pipeline-account?tab='+part+'">Open '+E(settingTab)+'</button>'):'<div id="account-holder"></div>';
+   body=window.pipelineHost&&!window.pipelineChatGPT?panel(E(settingTab),'<div class="pad"><button data-external="/?section='+E(settingTab)+'&amp;workspace='+E(state.workspace)+'">Open '+E(settingTab)+' in TrialAgents</button></div>'):'<div id="account-holder"></div>';
  }
  if(settingTab==='Billing'){
   body=state.team?'<section class="combined-billing-card"><div><strong>Pipeline Team · Monthly subscription</strong><p>US$49 per workspace per month · Unlimited seats</p>'+(state.billing?.paidThrough?'<p>Paid through '+E(new Date(state.billing.paidThrough).toLocaleDateString())+'</p>':'')+'</div>'+settingButton('Manage billing','billing.portal')+'</section>':
@@ -161,7 +161,7 @@ function settingsPage(){
 function teamPanel(){
  const roster=sectionData?.members||[], invites=sectionData?.invitations||[];
  const ordered=[...roster.filter(m=>m.role==='owner'),...roster.filter(m=>m.role!=='owner')];
- const invite=state.team?'<form class="pad gearform" id="invite">'+field('email','Email',inp('email','','email','required'))+field('role','Access',sel('role',[['editor','Editor'],['reader','Read only']],'editor'))+'<button class="primary">Send invitation</button></form>':'<div class="pad"><p>Invite unlimited team members for US$49 per workspace per month.</p><button class="primary team-upgrade" data-action="billing.checkout">Upgrade · $49 / month</button></div>';
+ const invite=state.team?'<form class="pad gearform" id="invite">'+field('email','Email',inp('email','','email','required'))+field('role','Access',sel('role',[['editor','Editor'],['reader','Read only']],'editor'))+'<button class="primary">Send invitation</button></form>':window.pipelineChatGPT?'<div class="pad"><p>Individual access is free. Team invitations are managed in the app.</p><button data-external="/?section=Team&amp;workspace='+E(state.workspace)+'">Open TrialAgents app ↗</button></div>':'<div class="pad"><p>Invite unlimited team members for US$49 per workspace per month.</p><button class="primary team-upgrade" data-action="billing.checkout">Upgrade · $49 / month</button></div>';
  return panel('Members',sectionData?.members?table(['Member','Access'],ordered.map(m=>[E(m.email),m.role==='owner'?'Owner':'<select data-member-role="'+E(m.user_id)+'">'+opts([['editor','Editor'],['reader','Read only'],['remove','Remove member']],m.role)+'</select>'])):'<p class="pad">Loading members…</p>')+
  panel('Invite team members',invite)+
  panel('Pending invitations',invites.length?table(['Recipient','Role',''],invites.map(i=>[E(i.email),E(i.role),'<button data-revoke="'+i.id+'">Revoke</button>'])):'<p class="pad">No pending invitations.</p>');
@@ -182,14 +182,14 @@ async function openBilling(op){
  const result=await rpc(op);await window.pipelineLink(result.url)
  }catch(e){notify(e.message)}
 }
-document.addEventListener('click',e=>{
+document.addEventListener('click',async e=>{
  const b=e.target.closest('button');if(!b)return;
  if(b.dataset.removeExamples&&state.role!=='reader'){
    const example=visibleExample();
    if(example&&b.dataset.removeExamples===example[0]){
      const entire=['Program','Plan'].includes(example[0]);
      const choice=entire?'Delete the remaining EX-101 example records?':'Delete example '+example[1]+'?';
-     if(confirm(choice+' Your own records and examples they depend on will be kept.'))void change('examples.remove',{scope:example[0]},()=>{
+     if(await confirmAction(choice+' Your own records and examples they depend on will be kept.'))void change('examples.remove',{scope:example[0]},()=>{
        if(filters.program&&!get(filters.program))delete filters.program;
        if(digestProgram&&!get(digestProgram))digestProgram='';
        render();
@@ -206,18 +206,18 @@ document.addEventListener('click',e=>{
  if(b.dataset.settingsSection){settingTab=b.dataset.settingsSection;sectionData=null;render();el('app').scrollTop=0;void loadSection()}
  if(b.dataset.tab==='Settings')void loadSection();
  if(b.dataset.view){selectedView=b.dataset.view;render()}
- if(b.dataset.deleteView && confirm('Remove this shared view?'))void change('view.remove',{id:b.dataset.deleteView},()=>{selectedView='';render()});
+ if(b.dataset.deleteView && await confirmAction('Remove this shared view?'))void change('view.remove',{id:b.dataset.deleteView},()=>{selectedView='';render()});
  if(b.dataset.revoke)void change('team.revoke',{id:b.dataset.revoke},loadSection);
  if(b.dataset.external)void window.pipelineLink('https://pipeline.trialagents.com'+b.dataset.external);
  if(b.dataset.action?.startsWith('billing.'))void openBilling(b.dataset.action);
  if(b.dataset.action==='more-logs')void loadSection(true);
 });
 document.addEventListener('input',e=>{if(e.target.id==='view-query'){viewSearch=e.target.value;const pos=e.target.selectionStart;render();el('view-query').focus();el('view-query').setSelectionRange(pos,pos)}});
-document.addEventListener('change',e=>{
+document.addEventListener('change',async e=>{
  if(e.target.id==='view-author'){viewAuthor=e.target.value;render()}
  if(e.target.id==='view-program'){viewProgram=e.target.value;render()}
  if(e.target.dataset.memberRole){
-   if(e.target.value==='remove'&&!confirm('Remove this member from the workspace?')){render();return}
+   if(e.target.value==='remove'&&!await confirmAction('Remove this member from the workspace?')){render();return}
    void change('team.member',{user:e.target.dataset.memberRole,role:e.target.value},loadSection)
  }
 });
@@ -230,17 +230,38 @@ document.addEventListener('submit',e=>{
  case 'invite':if(state.team)void change('team.invite',{email:get('email'),role:get('role')},loadSection);else {if(!window.pipelineHost)sessionStorage.setItem('pipeline-draft-invite',JSON.stringify({workspace:state.workspace,email:get('email'),role:get('role')}));void openBilling('billing.checkout')}break;
  }
 });
-window.pipelineMount=async snapshot=>{
- hydrate(snapshot);mountPlan();const search=new URLSearchParams(location.search);
- const selected=search.get('tab'),record=search.get('record'),view=search.get('view');
+window.pipelineLocation=()=>{
+ if(!state)return;
+ const url=new URL('/', 'https://pipeline.trialagents.com');
+ url.searchParams.set('workspace',state.workspace);
+ const pinned=state.tabs.find(t=>'custom-'+t.id===tab)?.view;
+ if(tab==='Custom views'&&selectedView||pinned)url.searchParams.set('view',pinned||selectedView);
+ else if(tab==='Settings')url.searchParams.set('section',settingTab);
+ else url.searchParams.set('tab',tab);
+ if(el('drawer').open&&editing&&el('editform')&&get(editing))url.searchParams.set('record',editing);
+ const focused=el('app').querySelector('.selected-record [data-open]');
+ if(!el('drawer').open&&focused)url.searchParams.set('record',focused.dataset.open);
+ const linked=el('linked-table');
+ if(linked&&el('drawer').open){url.searchParams.set('table',linked.dataset.table);if(linked.dataset.record)url.searchParams.set('record',linked.dataset.record)}
+ return url.href;
+};
+window.pipelineMount=async(snapshot,search=new URLSearchParams(location.search))=>{
+ if(window.pipelineChatGPT){
+  if(el('drawer').open)el('drawer').close();
+  tab='Overview';filters={};selectedView='';sectionData=null;editing='';returnTo=null;expanded.clear();sectionLoad++;
+ }
+ hydrate(snapshot);mountPlan();
+ const record=search.get('record'),view=search.get('view');
+ let selected=search.get('tab');
+ if(selected==='Overview'&&!record)selected=({Milestone:'Milestones',Activity:'Milestones',Decision:'Milestones',Deliverable:'Deliverables',Change:'Changes',Risk:'Risks'})[search.get('table')]||selected;
  if(selected&&Object.hasOwn(names,selected)&&selected!=='Settings')go(selected);
  if(record&&get(record))openItem(record);
- else if(search.get('table')&&(record||!Object.hasOwn(names,selected))){
+ else if(search.get('table')&&(record||!Object.hasOwn(names,selected)||!['Program','Milestone','Activity','Decision','Deliverable','Change','Risk'].includes(search.get('table')))){
    const tableId=search.get('table');
    const showPage=async(offset=0)=>{
      const page=await rpc('assistant.read',{table:tableId,id:record,offset});
      present('<h2>'+E(selected||page.table)+'</h2><div id="linked-table"></div><button data-close>Close</button>');
-     const holder=el('linked-table');holder.append(resultTable(page));
+     const holder=el('linked-table');holder.dataset.table=tableId;if(record)holder.dataset.record=record;holder.append(resultTable(page));
      if(record&&!page.records.length)notify('This record is unavailable.');
      if(page.next!=null){const next=document.createElement('button');next.textContent='Next page';next.onclick=()=>showPage(page.next).catch(e=>notify(e.message));holder.append(next)}
    };
@@ -254,3 +275,12 @@ window.pipelineMount=async snapshot=>{
  }
 };
 window.pipelineOpenView=id=>{if(state.views.some(v=>v.id===id)){selectedView=id;go('Custom views')}};
+
+function confirmAction(message){
+ const dialog=document.createElement('dialog'),text=document.createElement('p'),cancel=document.createElement('button'),accept=document.createElement('button')
+ dialog.className='pipeline-confirm';dialog.setAttribute('aria-label',message);text.textContent=message
+ cancel.textContent='Cancel';accept.textContent='Confirm';accept.className='primary'
+ cancel.onclick=()=>dialog.close();accept.onclick=()=>dialog.close('confirm')
+ dialog.append(text,cancel,accept);document.body.append(dialog)
+ return new Promise(resolve=>{dialog.onclose=()=>{dialog.remove();resolve(dialog.returnValue==='confirm')};dialog.showModal();cancel.focus()})
+}

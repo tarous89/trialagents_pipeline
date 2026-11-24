@@ -1,3 +1,4 @@
+import {workspaceOperations} from './workspace-operations.mjs'
 import {createHash,randomBytes,randomUUID} from 'node:crypto'
 import {isDeepStrictEqual} from 'node:util'
 import {examplePortfolio,removeExamples,itemBody} from './examples.mjs'
@@ -52,6 +53,12 @@ export function pipeline(db,{origin='https://pipeline.trialagents.com',billing}=
   return async function execute(user,request,source='web'){
     check(user?.id&&user.email,'Sign in to Pipeline',401)
     check(request && typeof request.op==='string','Invalid request')
+    const fromWorkspace=source==='ChatGPT workspace'
+    if(fromWorkspace){
+      check(workspaceOperations.includes(request.op),'Unavailable workspace action',403)
+      check(uuid(request.workspace),'Choose a workspace')
+      source='ChatGPT'
+    }
     if(['assistant.view.create','assistant.view.update','assistant.view.retry'].includes(request.op)){
       check(source==='ChatGPT','Author shared views through the connected assistant',403)
       const retry=request.op==='assistant.view.retry'
@@ -79,7 +86,18 @@ export function pipeline(db,{origin='https://pipeline.trialagents.com',billing}=
     const {op,input={}}=request
     return db.transaction(async q=>{
       if(op==='home.ensure'&&source==='consent')return {workspace:await ensureHome(q,user)}
-      if(source==='ChatGPT')check(assistantReads.has(op)||assistantWrites.has(op)||['team.invite','design.save'].includes(op),'Unavailable in Pipeline for ChatGPT',403)
+      if(fromWorkspace&&op==='frame.connect'){
+        await membership(q,request.workspace,user)
+        check(/^[a-f0-9]{64}$/.test(input.challenge)&&/^[a-f0-9]{64}$/.test(user.accessDigest),'Connect Pipeline',401)
+        const [grant]=await q(`INSERT INTO pipeline.frame_access(challenge,user_id,workspace_id,access_digest,expires_at)
+          VALUES($1,$2,$3,$4,now()+interval '10 minutes') ON CONFLICT(challenge) DO UPDATE SET
+          access_digest=excluded.access_digest,expires_at=excluded.expires_at WHERE
+          pipeline.frame_access.user_id=excluded.user_id AND pipeline.frame_access.workspace_id=excluded.workspace_id RETURNING workspace_id`,
+          [input.challenge,user.id,request.workspace,user.accessDigest])
+        check(grant,'Open the workspace again',409)
+        return {workspace:request.workspace}
+      }
+      if(source==='ChatGPT'&&!fromWorkspace)check(assistantReads.has(op)||assistantWrites.has(op)||['team.invite','design.save'].includes(op),'Unavailable in Pipeline for ChatGPT',403)
       if(op==='team.accept')return accept(q,user,input,source)
       const home=(!request.workspace&&assistantReads.has(op))?await one(q,'SELECT id FROM pipeline.workspace WHERE owner_id=$1',[user.id]):null
       if(!request.workspace&&assistantReads.has(op))check(home,'Reconnect to initialize your personal workspace',409)
@@ -113,7 +131,7 @@ export function pipeline(db,{origin='https://pipeline.trialagents.com',billing}=
             const rows=await q('SELECT '+itemBody+' AS body FROM pipeline.item WHERE workspace_id=$1 ORDER BY id',[w])
             const memberships=await q('SELECT w.id,w.title,m.role,w.paid_until,w.suspended FROM pipeline.workspace w JOIN pipeline.member m ON w.id=m.workspace_id WHERE m.user_id=$1 ORDER BY w.title,w.id',[user.id])
             return {...visible(m),revision:m.revision,workspace:w,workspaces:memberships.filter(x=>x.role==='owner'||paid(x)).map(visible),
-              user:{id:user.id,name:person(user),email:user.email},settings:{...defaultSettings,...m.settings},preferences:m.preferences,
+              user:{id:user.id,name:person(user),email:user.email,...fromWorkspace&&{firstName:user.firstName||'',lastName:user.lastName||'',organization:user.organization||''}},settings:{...defaultSettings,...m.settings},preferences:m.preferences,
               billing:m.role==='owner'?{customer:Boolean(m.customer),paidThrough:m.paid_until}:undefined,items:rows.map(x=>x.body),tabs:m.tabs,accent:m.accent,views:await viewList(q,w)}
           }
           case 'records.read': {

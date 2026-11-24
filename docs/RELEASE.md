@@ -41,3 +41,11 @@ Open a fictional EX-101 workspace in a fresh chat. The first scoped question ope
 Authored views load the Pipeline-owned renderer on demand. The parent sanitizes content and passes it into an opaque-origin sandbox. Its fixed script supports local interactive controls and explicit version-checked saves. Content never needs to be included in a renderer URL. Listings, a real ChatGPT session, staging latency and review access should be checked on the chosen deployment before submission.
 
 The existing Claude plugin material is retained. This release changes the ChatGPT MCP path. Review packaging is a separate manual action.
+
+## ChatGPT workspace rendering
+
+The browser and embedded builds share the Pipeline shell, styles, navigation, planner, record drawers and saved-view renderer. The embedded header opens the current web workspace and adds a keyboard-accessible sidebar toggle beside the logo. The sidebar starts closed at widths up to 800 px. Personal and Support use the standalone account component. Account security and billing administration take place on the website.
+
+The MCP component frames the app at `https://pipeline.trialagents.com/pipeline-embedded`. This keeps portfolio and account data on the first-party origin. The model receives the scoped tool projection. The frame creates a random secret in memory and sends its SHA-256 digest to the app-only `connect_pipeline_frame` tool. The first-party API verifies the corresponding grant, workspace, current membership and unrevoked OAuth token on use. The frame can renew a ten-minute grant while the OAuth connection remains valid. The renderer for authored content stays on the same allowlisted origin in its own isolated sandbox.
+
+After deploying, refresh tools on the existing private MCP connection if its cached tool list predates the frame operation. Start a new ChatGPT conversation and ask for program status. Verify the overview cards, navigation, both sidebar states, the record drawer and a saved view. Open the web app from the header and compare the same tab or view.

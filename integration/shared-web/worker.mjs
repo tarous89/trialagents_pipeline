@@ -12,7 +12,7 @@ try{
 let cleanAfter=0
 while(true){
  if(Date.now()>=cleanAfter){
-   try{await sql`DELETE FROM pipeline.view_draft WHERE expires<=now()`;cleanAfter=Date.now()+3600000}
+   try{await sql`DELETE FROM pipeline.view_draft WHERE expires<=now()`;await sql`DELETE FROM pipeline.frame_access WHERE expires_at<=now()`;cleanAfter=Date.now()+3600000}
    catch{cleanAfter=Date.now()+60000}
  }
  try{await deliverMail(db,async job=>{

@@ -1,3 +1,4 @@
+import {createHash} from 'node:crypto';
 import {readFile} from 'node:fs/promises';
 import path from 'node:path';
 import {introspectAccessToken} from '@/app/lib/oauth-server';
@@ -15,7 +16,7 @@ async function endpoint(request:Request){
    const info=await introspectAccessToken(token);
    if(!info.active||!info.sub||info.resource!==audience||!String(info.scope).split(' ').includes('mcp:tools'))return null;
    const [user]=await getSql()`SELECT id,email,first_name AS "firstName",last_name AS "lastName" FROM users WHERE id=${info.sub}`;
-   return user??null;
+   return user?{...user,accessDigest:createHash('sha256').update(token).digest('hex')}:null;
  }});
  return serve(request);
 }

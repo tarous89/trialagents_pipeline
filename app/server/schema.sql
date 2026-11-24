@@ -90,3 +90,11 @@ CREATE TABLE IF NOT EXISTS pipeline.view_draft (
  payload jsonb NOT NULL, digest text NOT NULL,expires timestamptz NOT NULL DEFAULT now()+interval '1 day',
  PRIMARY KEY(workspace_id,actor,id)
 );
+
+-- Short-lived, first-party frame grants. Neither browser nor OAuth bearer
+-- credentials are stored. Membership and the upstream token are checked on use.
+CREATE TABLE IF NOT EXISTS pipeline.frame_access (
+ challenge text PRIMARY KEY, user_id text NOT NULL, workspace_id uuid NOT NULL REFERENCES pipeline.workspace ON DELETE CASCADE,
+ access_digest text NOT NULL, expires_at timestamptz NOT NULL
+);
+CREATE INDEX IF NOT EXISTS pipeline_frame_expiry ON pipeline.frame_access(expires_at);

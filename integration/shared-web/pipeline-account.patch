@@ -1,0 +1,85 @@
+--- a/app/components/AccountSettings.tsx
++++ b/app/components/AccountSettings.tsx
+@@ -41,7 +41,9 @@
+   }
+ }
+ 
+-function SettingsContent({combined=false,reviewAccess=false,embedded=false,projectId,pipelineSection}:{pipelineSection?:"account"|"support";combined?:boolean;reviewAccess?:boolean;embedded?:boolean;projectId?:string}) {
++function SettingsContent({combined=false,reviewAccess=false,embedded=false,projectId,pipelineSection,pipelineFrame=false}:{pipelineFrame?:boolean;pipelineSection?:"account"|"support";combined?:boolean;reviewAccess?:boolean;embedded?:boolean;projectId?:string}) {
++  type AccountSurface={profile:Session & {organization:string};openPersonal:()=>Promise<void>;openPolicy:(path:string)=>Promise<void>};
++  const surface=()=>pipelineFrame?(window.parent as Window & {pipelineAccountSurface?:()=>AccountSurface}).pipelineAccountSurface?.():undefined;
+   const [pricing, setPricing] = useState<{ site: { price: string; discountPercent: number }; intel: { price: string; discountPercent: number } } | null>(null);
+   const requestedTab=useSearchParams().get("tab");
+   const [tab, setTab] = useState<SettingsTab>(pipelineSection??(["subscription","billing"].includes(requestedTab??"")?"billing":"account"));
+@@ -66,6 +68,12 @@
+     // Host detection is browser-only and intentionally initializes after hydration.
+     // eslint-disable-next-line react-hooks/set-state-in-effect
+     setSiteAgentHost(window.location.hostname.toLowerCase() === "site.trialagents.com");
++    if (pipelineFrame) {
++      const account=surface();
++      if(account?.profile)setProfile({...account.profile,vatNumber:"",billingAddress:""});
++      setHydrated(true);
++      return;
++    }
+     function openLogin() {
+       if (pipelineSection && window.top) window.top.location.replace("/auth?mode=login&pipeline=1");
+       else window.location.replace("/auth?mode=login");
+@@ -91,6 +99,7 @@
+ 
+   async function saveProfile(event: FormEvent<HTMLFormElement>) {
+     event.preventDefault();
++    if(pipelineFrame){await surface()?.openPersonal();return}
+     setSaved("");
+     const response = await fetch("/api/auth/account", {
+       method: "PATCH",
+@@ -118,6 +127,7 @@
+ 
+   async function changePassword(event: FormEvent<HTMLFormElement>) {
+     event.preventDefault();
++    if(pipelineFrame){await surface()?.openPersonal();return}
+     setPasswordMessage("");
+     const response = await fetch("/api/auth/password", {
+       method: "POST",
+@@ -163,6 +173,7 @@
+   }
+ 
+   async function signOut() {
++    if(pipelineFrame){await surface()?.openPersonal();return}
+     await fetch("/api/auth/logout", { method: "POST" }).catch(() => undefined);
+     if(pipelineSection && window.top)window.top.location.href="/auth?mode=login&pipeline=1";else window.location.assign("/auth?mode=login");
+   }
+@@ -218,19 +229,19 @@
+               <form className="settings-card ta-card" onSubmit={saveProfile}>
+                 <div className="settings-card-heading"><span><AppIcon name="building" size={20} /></span><div><h2>{pipelineSection?"Personal details":"Personal & organization details"}</h2><p>{pipelineSection?"Your TrialAgents account":"Used on your account, invoices and report records"}</p></div></div>
+                 <div className="settings-form-grid">
+-                  <label>First name<input value={profile.firstName} onChange={(event) => setProfile({ ...profile, firstName: event.target.value })} required /></label>
+-                  <label>Last name<input value={profile.lastName} onChange={(event) => setProfile({ ...profile, lastName: event.target.value })} required /></label>
+-                  <label className="wide">{pipelineSection ? "Organization name" : "Organization"}<input autoComplete="organization" maxLength={pipelineSection ? 160 : undefined} value={profile.organization} onChange={(event) => setProfile({ ...profile, organization: event.target.value })} placeholder="Company or institution" /></label>
++                  <label>First name<input readOnly={pipelineFrame} value={profile.firstName} onChange={(event) => setProfile({ ...profile, firstName: event.target.value })} required /></label>
++                  <label>Last name<input readOnly={pipelineFrame} value={profile.lastName} onChange={(event) => setProfile({ ...profile, lastName: event.target.value })} required /></label>
++                  <label className="wide">{pipelineSection ? "Organization name" : "Organization"}<input autoComplete="organization" maxLength={pipelineSection ? 160 : undefined} readOnly={pipelineFrame} value={profile.organization} onChange={(event) => setProfile({ ...profile, organization: event.target.value })} placeholder="Company or institution" /></label>
+                   {!pipelineSection&&<><label>VAT number<input value={profile.vatNumber} onChange={(event) => setProfile({ ...profile, vatNumber: event.target.value })} placeholder="EU VAT number" /></label>
+                   <label className="wide">Billing address<textarea value={profile.billingAddress} onChange={(event) => setProfile({ ...profile, billingAddress: event.target.value })} placeholder="Street, postal code, city, country" /></label></>}
+                 </div>
+-                <button className="ta-primary-button" type="submit"><AppIcon name="check" /> Save details</button>
++                <button className="ta-primary-button" type="submit"><AppIcon name="check" /> {pipelineFrame?"Edit details in TrialAgents":"Save details"}</button>
+               </form>
+               <form className="settings-card ta-card" onSubmit={changePassword}>
+                 <div className="settings-card-heading"><span><AppIcon name="key" size={20} /></span><div><h2>Password</h2><p>Change your account password</p></div></div>
+-                <div className="settings-form-grid"><label>Current password<input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required /></label><label>New password<input type="password" minLength={8} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required /></label></div>
++                {!pipelineFrame&&<div className="settings-form-grid"><label>Current password<input type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} required /></label><label>New password<input type="password" minLength={8} value={newPassword} onChange={(event) => setNewPassword(event.target.value)} required /></label></div>}
+                 {passwordMessage && <p className="settings-inline-message">{passwordMessage}</p>}
+-                <button className="ta-secondary-button" type="submit"><AppIcon name="key" /> Update password</button>
++                <button className="ta-secondary-button" type="submit"><AppIcon name="key" /> {pipelineFrame?"Change password in TrialAgents":"Update password"}</button>
+               </form>
+               {!siteAgentHost&&!pipelineSection&&<ChatGPTConnection/>}
+               {!siteAgentHost&&!pipelineSection&&<ClaudeConnection/>}
+@@ -270,7 +281,7 @@
+           {tab === "support" && (
+             <div className="settings-column">
+               <form className="settings-card ta-card" onSubmit={sendSupport}><div className="settings-card-heading"><span><AppIcon name="support" size={20} /></span><div><h2>Contact support</h2><p>Tell us what you need help with</p></div></div>{supportSent ? <div className="analysis-ready"><span><AppIcon name="check" /></span><div><strong>Message received</strong><p>We’ll reply to {profile.email}.</p></div></div> : <><label className="settings-message-label">Your message<textarea value={supportMessage} onChange={(event) => setSupportMessage(event.target.value)} placeholder="Tell us what’s on your mind…" required /></label>{supportError && <p className="settings-inline-message" role="alert">{supportError}</p>}<button className="ta-primary-button" type="submit" disabled={supportSending}><AppIcon name="send" /> {supportSending ? "Sending…" : "Send message"}</button></>}</form>
+-              <section className="settings-card ta-card"><div className="settings-card-heading"><span><AppIcon name="legal" size={20} /></span><div><h2>Legal</h2><p>Trial Agents policies for {pipelineSection?"TrialAgents Pipeline":"TrialAgents Intel"}</p></div></div><div className="legal-buttons"><Link className="ta-secondary-button" href="/privacy-policy" target={pipelineSection ? "_top" : undefined}>Privacy Policy</Link><Link className="ta-secondary-button" href="/terms-of-service" target={pipelineSection ? "_top" : undefined}>Terms of Service</Link><a className="ta-secondary-button" href={pipelineSection?"mailto:contact@trialagents.com":"mailto:intel@trialagents.com"}><AppIcon name="mail" /> {pipelineSection?"contact@trialagents.com":"intel@trialagents.com"}</a></div></section>
++              <section className="settings-card ta-card"><div className="settings-card-heading"><span><AppIcon name="legal" size={20} /></span><div><h2>Legal</h2><p>Trial Agents policies for {pipelineSection?"TrialAgents Pipeline":"TrialAgents Intel"}</p></div></div><div className="legal-buttons"><Link className="ta-secondary-button" href="/privacy-policy" onClick={pipelineFrame?e=>{e.preventDefault();void surface()?.openPolicy("/privacy-policy")}:undefined} target={pipelineSection ? "_top" : undefined}>Privacy Policy</Link><Link className="ta-secondary-button" href="/terms-of-service" onClick={pipelineFrame?e=>{e.preventDefault();void surface()?.openPolicy("/terms-of-service")}:undefined} target={pipelineSection ? "_top" : undefined}>Terms of Service</Link><a className="ta-secondary-button" href={pipelineSection?"mailto:contact@trialagents.com":"mailto:intel@trialagents.com"}><AppIcon name="mail" /> {pipelineSection?"contact@trialagents.com":"intel@trialagents.com"}</a></div></section>
+             </div>
+           )}
+         </section>

@@ -19,11 +19,11 @@ export function pipelineHttp({authorize,run,readWidget,audience=resource}){
    const handler=createMcpHandler(()=>{
      const server=new Server({name:'TrialAgents Pipeline',version:'0.2.0'},{capabilities:{tools:{},resources:{}},instructions})
      server.setRequestHandler('tools/list',()=>({tools:toolList}))
-     server.setRequestHandler('tools/call',({params})=>invoke(params.name,params.arguments??{},r=>run(user,r,'ChatGPT')))
+     server.setRequestHandler('tools/call',({params})=>invoke(params.name,params.arguments??{},(r,surface)=>run(user,r,surface==='workspace'?'ChatGPT workspace':'ChatGPT')))
      server.setRequestHandler('resources/list',()=>({resources:[{uri:widgetUri,name:'Pipeline workspace',mimeType:mime,_meta:resourceMeta}]}))
      server.setRequestHandler('resources/read',async({params})=>{
-       if(params.uri!==widgetUri)throw Error('Unknown Pipeline resource')
-       return {contents:[{uri:widgetUri,mimeType:mime,text:await readWidget(),_meta:resourceMeta}]}
+       if(![widgetUri,'ui://trialagents-pipeline/chatgpt-workspace-v2.html'].includes(params.uri))throw Error('Unknown Pipeline resource')
+       return {contents:[{uri:params.uri,mimeType:mime,text:await readWidget(),_meta:resourceMeta}]}
      })
      return server
    },{legacy:'stateless',maxRequestBodySize:320000})
