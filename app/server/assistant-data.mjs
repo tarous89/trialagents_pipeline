@@ -126,7 +126,7 @@ export async function changeRow(q,m,user,source,action,{table,id,values={}},save
   }
   check(values&&typeof values==='object'&&!Array.isArray(values)&&Object.keys(values).length>0,'Provide changed fields')
   const fields=fieldsFor(m.catalog,table),defs=new Map(fields.map(d=>[d.id,d])),extras={},edges=[]
-  const record={...(table==='Organization'?{contacts:[]}:{parents:[],deps:[],status:'Planned',risk:'None'}),...old,id,type:table}
+  const record={...(table==='Organization'?{contacts:[]}:{parents:[],deps:[],start:'',end:'',owner:'',status:'Planned',risk:'None'}),...old,id,type:table}
   for(const [k,v] of Object.entries(values)){
     const d=defs.get(k);check(d,'Field unavailable')
     if(d.kind==='relationship'){edges.push([d,v]);continue}

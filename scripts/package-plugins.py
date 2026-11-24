@@ -7,9 +7,10 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--output", type=Path, default=ROOT / "dist")
+parser.add_argument("--host", choices=("chatgpt", "claude"), help="Build only this host's archive")
 args = parser.parse_args()
 args.output.mkdir(parents=True, exist_ok=True)
-for host in ("chatgpt", "claude"):
+for host in ((args.host,) if args.host else ("chatgpt", "claude")):
     payload = {}
     for directory in ("shared", host):
         base = ROOT / "plugins" / directory

@@ -8,7 +8,7 @@ function notify(message){
 function hydrate(snapshot){
   state=snapshot;for(const id of Object.keys(names))delete names[id];Object.assign(names,originalNames);
   for(const t of state.tabs)names[t.builtin||'custom-'+t.id]=t.label;
-  data=structuredClone(state.items.filter(r=>r.type!=='Organization'));
+  data=structuredClone(state.items.filter(r=>r.type!=='Organization').map(r=>({...r,start:r.start??'',end:r.end??'',owner:r.owner??''})));
   orgDb=structuredClone(state.items.filter(r=>r.type==='Organization'));
   settings={...state.settings,emails:state.preferences};
   directory.splice(0,directory.length,[state.user.name,'']);

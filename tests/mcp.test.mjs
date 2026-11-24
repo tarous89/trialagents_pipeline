@@ -39,4 +39,33 @@ test('standalone shared-web MCP authenticates the exact audience and runs the co
  assert.deepEqual(retry.receipt,saved.receipt);assert.equal((await result('list_pipeline_views',{workspace})).views.length,1)
  const ui=(await rpc('resources/read',{uri:widgetUri})).contents[0]
  assert.equal(ui._meta.ui.csp.frameDomains[0],'https://pipeline.trialagents.com');assert.match(ui.text,/Open TrialAgents app/)
+ const read = query => result('read_pipeline', {workspace,query})
+ async function seed(table, name, fields=['name']) {
+   const page=await read({table,search:name,fields})
+   assert.equal(page.records.length,1)
+   return page.records[0]
+ }
+ const program=await seed('Program','Clinical development of EX-101')
+ const milestone=await seed('Milestone','Site readiness review',['name','start','end'])
+ const activity=await seed('Activity','Prepare the site readiness checklist')
+ const cases=[
+   ['Program',{name:'Clinical development of RX-204',asset:'RX-204',stage:'Phase 1',status:'Planned'}],
+   ['Milestone',{name:'Protocol sign-off',end:'2027-02-15',parents:[program.id]}],
+   ['Deliverable',{name:'Site readiness evidence pack',signoff:'Clinical Operations',parents:[activity.id]}],
+   ['Change',{name:'Add a second readiness review',description:'The team requested a second review.',parents:[milestone.id]}],
+   ['Activity',{name:'Prepare activation summary',parents:[program.id],start:'2027-03-01',end:'2027-03-05',deps:[{id:milestone.id,from:'reached',to:'start'}]}]
+ ]
+ for(const [table,values] of cases)await t.test('review case creates and reopens one '+table,async()=>{
+   const before=await read({table,search:values.name})
+   assert.equal(before.records.length,0)
+   const write={workspace,table,revision:before.revision,request_id:randomUUID(),values}
+   const created=await result('create_pipeline_record',write)
+   assert.deepEqual(await result('create_pipeline_record',write),created)
+   const query={table,id:created.id,fields:Object.keys(values)}
+   const shown=(await call('open_pipeline',{workspace,query}))._meta.pipeline
+   assert.equal(shown.data.records.length,1)
+   assert.deepEqual(shown.data.records[0],{table,id:created.id,values})
+   assert.equal((await read({table,search:values.name})).records.length,1)
+   if(table==='Change')assert.deepEqual(await seed('Milestone','Site readiness review',['name','start','end']),milestone)
+ })
 })

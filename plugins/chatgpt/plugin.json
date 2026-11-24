@@ -2,7 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "trialagents-pipeline",
   "version": "0.2.0",
-  "description": "Track biotech programs, milestones, activities, decisions, deliverables, risks and changes in an interactive team workspace.",
+  "description": "Manage your biotech pipeline from ChatGPT. Track programs, milestones, activities, deliverables and changes in a shared workspace.",
   "author": {
     "name": "Atlas Consulting",
     "email": "intel@trialagents.com",
@@ -20,10 +20,10 @@
     "com.openai": {
       "interface": {
         "displayName": "TrialAgents Pipeline",
-        "shortDescription": "Biotech programs & milestones",
-        "longDescription": "Track biotech programs, milestones, decisions and risks in a shared workspace. Connect your TrialAgents account to save and revisit your work. Owners manage the workspace structure and can invite teammates in workspaces with invitations enabled. Editors can update records and save shared views.",
+        "shortDescription": "Manage your biotech pipeline",
+        "longDescription": "Manage your biotech pipeline from ChatGPT. Add programs, milestones, activities, deliverables and changes, track dependencies, and open the same workspace in the TrialAgents app. Connect your account to save your work. Owners can manage tables and relationships, and editors can update records and save shared views.",
         "developerName": "Atlas Consulting",
-        "category": "Data & Analytics",
+        "category": "Scientific Research",
         "capabilities": [
           "Interactive"
         ],
@@ -32,9 +32,9 @@
         "privacyPolicyURL": "https://pipeline.trialagents.com/pipeline-info/privacy",
         "termsOfServiceURL": "https://pipeline.trialagents.com/pipeline-info/terms",
         "defaultPrompt": [
-          "Show my pipeline and the milestones due next.",
-          "Create a saved view of planned activities in my workspace.",
-          "Show the dependencies for my selected milestone."
+          "Add a program for a new clinical development asset.",
+          "Show the next EX-101 milestone and its dependencies.",
+          "Add a deliverable to my site readiness activity."
         ],
         "composerIcon": "./assets/composer-icon.png",
         "logo": "./assets/logo.png",
@@ -46,34 +46,34 @@
         "test_cases": {
           "positive": [
             {
-              "description": "First connected question",
-              "prompt": "Which EX-101 milestone is due next?",
-              "tools_triggered": "open_pipeline",
-              "expected_behavior": "Open once with the matching milestone and date."
+              "description": "Add a program. Use a fresh, writable personal review workspace with no existing RX-204 program.",
+              "prompt": "Add a program called Clinical development of RX-204 for our fictional asset RX-204. Set its stage to Phase 1 and its status to Planned.",
+              "tools_triggered": "read_pipeline, create_pipeline_record, open_pipeline",
+              "expected_behavior": "Create one Program with the requested name, asset, stage and status. Show the workspace once. Read back the returned record ID and confirm the values."
             },
             {
-              "description": "Editor changes one milestone",
-              "prompt": "Move the EX-101 protocol review milestone to 15 December 2026.",
-              "tools_triggered": "read_pipeline, update_pipeline_record, open_pipeline",
-              "expected_behavior": "Update the requested record. On a follow-up answer without reopening."
+              "description": "Add a milestone. The review workspace contains the single seeded Clinical development of EX-101 program.",
+              "prompt": "Under Clinical development of EX-101, add a milestone called Protocol sign-off due 15 February 2027.",
+              "tools_triggered": "read_pipeline, create_pipeline_record, open_pipeline",
+              "expected_behavior": "Resolve the existing EX-101 program. Create one Milestone named Protocol sign-off with end date 2027-02-15 and that program ID in parents. Show the workspace once and confirm the date."
             },
             {
-              "description": "Owner defines committees",
-              "prompt": "Create a Committees table with a Name field. Each decision should link to one committee.",
-              "tools_triggered": "get_pipeline_schema, add_pipeline_table, add_pipeline_relationship, open_pipeline",
-              "expected_behavior": "Create one table with a many-to-one relationship from Decision."
+              "description": "Add a deliverable. The review workspace contains the seeded EX-101 activity Prepare the site readiness checklist.",
+              "prompt": "Add a deliverable called Site readiness evidence pack to the EX-101 activity Prepare the site readiness checklist. Set its sign-off to Clinical Operations.",
+              "tools_triggered": "read_pipeline, create_pipeline_record, open_pipeline",
+              "expected_behavior": "Create one Deliverable linked to the existing activity ID, with signoff equal to Clinical Operations. Return the saved deliverable and show the workspace once."
             },
             {
-              "description": "Save a linked view",
-              "prompt": "Save a view called Upcoming decisions by committee.",
-              "tools_triggered": "prepare_pipeline_view, read_pipeline, create_pipeline_view",
-              "expected_behavior": "Present the saved view once and open the same view from its web link."
+              "description": "Add a change. The review workspace contains the seeded EX-101 Site readiness review milestone.",
+              "prompt": "Log a change called Add a second readiness review for the EX-101 Site readiness review milestone. Record that the team requested a second review. Keep its dates as they are.",
+              "tools_triggered": "read_pipeline, create_pipeline_record, open_pipeline",
+              "expected_behavior": "Create one Change with the existing milestone in parents and the requested explanation in description. Confirm the change and show the workspace once. The milestone dates remain intact."
             },
             {
-              "description": "Archive a field",
-              "prompt": "Archive the Legacy code column in Committees and show what it affects.",
-              "tools_triggered": "get_pipeline_schema, preview_pipeline_archive, archive_pipeline_column, open_pipeline",
-              "expected_behavior": "Identify affected views, resolve impact and archive the selected column."
+              "description": "Add an activity. The review workspace contains the seeded EX-101 program and its Site readiness review milestone.",
+              "prompt": "Add an activity called Prepare activation summary under Clinical development of EX-101, from 1 to 5 March 2027. It must wait for Site readiness review to finish before it starts.",
+              "tools_triggered": "read_pipeline, create_pipeline_record, open_pipeline",
+              "expected_behavior": "Create one Activity with the program as parent, start 2027-03-01 and end 2027-03-05. Verify a dependency on the existing milestone that gates the activity start. Show the workspace once."
             }
           ],
           "negative": [
@@ -82,8 +82,8 @@
               "prompt": "Permanently drop the Committees table and erase its columns."
             },
             {
-              "description": "Explain the owner role requirement.",
-              "prompt": "As an editor, add a column to Decisions for everyone."
+              "description": "External filing is outside Pipeline. Explain the limitation and leave workspace records unchanged.",
+              "prompt": "File our protocol amendment with the regulator and obtain an official receipt."
             },
             {
               "description": "Outside Pipeline operational planning. No research or email action.",
@@ -92,11 +92,18 @@
           ]
         },
         "commerce": false,
-        "commerce_description": "The plugin supports account linking, saved workspace data and team collaboration where the owner has invitation permission. The Open TrialAgents app action opens the user’s workspace. The plugin has no purchase, subscription, upgrade or checkout flow."
+        "commerce_description": "The plugin supports account linking, saved workspace data and team collaboration where the owner has invitation permission. The Open TrialAgents app action opens the user’s workspace. The plugin has no purchase, subscription, upgrade or checkout flow.",
+        "prompts": [
+          "Add a program called Clinical development of RX-204 for our fictional asset RX-204. Set its stage to Phase 1 and its status to Planned.",
+          "Under Clinical development of EX-101, add a milestone called Protocol sign-off due 15 February 2027.",
+          "Add a deliverable called Site readiness evidence pack to the EX-101 activity Prepare the site readiness checklist. Set its sign-off to Clinical Operations.",
+          "Log a change called Add a second readiness review for the EX-101 Site readiness review milestone. Record that the team requested a second review. Keep its dates as they are.",
+          "Add an activity called Prepare activation summary under Clinical development of EX-101, from 1 to 5 March 2027. It must wait for Site readiness review to finish before it starts."
+        ]
       },
       "publication": {
         "countries": [],
-        "release_notes": "First release of the connected Pipeline workspace, record management, shared custom views and owner customization."
+        "release_notes": "Manage biotech development programs in ChatGPT. Create milestones, activities, deliverables and change records, link them to your plan, and reopen the same saved workspace in the TrialAgents app."
       }
     }
   }
