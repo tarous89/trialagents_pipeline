@@ -17,10 +17,10 @@ From the [private production source directory](https://github.com/tarous89/intel
 ```sh
 npm ci
 npm test
-python scripts/package-plugins.py ../intel_mcp
+python scripts/package-plugins.py
 ```
 
-The build produces a browser HTML/JS pair, the complete embedded MCP Apps document, and two ZIPs named trialagents-pipeline-chatgpt-0.1.0.zip and trialagents-pipeline-claude-0.1.0.zip. Package artwork comes from Intel commit eaee7070e05a8247f1121209a1345daa7e7d7000. Packaging reads immutable Git blobs for identical artwork and fixed ZIP timestamps. The public packaging workflow builds both ZIPs from the pinned artwork. The private web workflow runs the application tests, compares the build with the deployable files, and attaches screenshots from a fictional workspace. Set PIPELINE_CAPTURE_DIR to an output directory when running npm test to capture those screenshots locally.
+The build produces a browser HTML/JS pair, the complete embedded MCP Apps document, and two ZIPs named trialagents-pipeline-chatgpt-plugin-0.2.5.zip and trialagents-pipeline-claude-plugin-0.2.5.zip. Each host's package is built only from its own directory under plugins/, with fixed ZIP timestamps; the ChatGPT archive reproduces the final 0.2.5 review package byte for byte. Both packages share one version, and the script fails if they diverge. The public packaging workflow builds both ZIPs. The private web workflow runs the application tests, compares the build with the deployable files, and attaches screenshots from a fictional workspace. Set PIPELINE_CAPTURE_DIR to an output directory when running npm test to capture those screenshots locally.
 
 For a clean integration rebuild, check out the web and MCP base revisions from [the source map](SOURCES.md). From the private production source directory run the following commands, pointing at your two clean checkouts.
 
@@ -56,11 +56,24 @@ The five model-facing capabilities open and read the workspace, save records, cr
 
 ## Directory materials and outstanding live evidence
 
-Use the [public plugin definitions](https://github.com/tarous89/trialagetns_pipeline/tree/main/plugins) for listing copy, starter prompts, skills, five positive and three negative ChatGPT scenarios, OAuth metadata, and the Claude plugin manifest. The archives reuse the Intel brand images. Use the Atlas Consulting legal URLs declared in the manifests and verify Pipeline data processing is covered before submission. The support route opens the shared TrialAgents form.
+Use the [public plugin definitions](https://github.com/tarous89/trialagents_pipeline/tree/main/plugins) for listing copy, starter prompts, skills, the ChatGPT app binding and the Claude plugin manifest. Both archives use the same brand images. Use the Atlas Consulting legal URLs declared in the manifests and verify Pipeline data processing is covered before submission. The support route opens the shared TrialAgents form.
 
 Run the listing scenarios with real ChatGPT and Claude accounts against the deployed candidate. Start with a fictional owner workspace containing a planned program named NT-101, and dedicated editor and reader accounts with preconfigured team access. Place reviewer credentials in the respective private submission form. Capture an accessible recording from the live assistant and include it in the submission. A simulator screenshot or a locally generated ZIP establishes packaging and browser behavior only.
 
 Directory references: [OpenAI package and review workflow](https://developers.openai.com/plugins/deploy/submission), [Anthropic Connectors Directory FAQ](https://support.claude.com/en/articles/11596036-anthropic-connectors-directory-faq). Record actual public URLs, review receipt and approval for each host after submission.
+
+### Claude plugin
+
+The Claude package in plugins/claude mirrors ChatGPT 0.2.5. It has the same name, version, author, legal and support URLs, keywords and artwork, and its skill keeps the same rules. Only the host details differ:
+
+| ChatGPT 0.2.5 | Claude 0.2.5 |
+| --- | --- |
+| plugin.json with the com.openai interface, onboarding skill, review and publication blocks | .claude-plugin/plugin.json with displayName, icon and legal/support URLs. Claude has no starter-prompt, review or release-notes fields in the manifest, so those go in the directory submission form. |
+| .app.json binding the published ChatGPT app | .mcp.json with a remote HTTP server at https://mcp.trialagents.com/pipeline-claude/mcp. Claude discovers OAuth from the endpoint's protected-resource metadata and registers dynamically. The plugin holds no client configuration. |
+| assets/ logo, dark logo and composer icons | .claude-plugin/icon.png, the same image as logo.png |
+| skills/manage-pipeline: display the workspace inline | Same rules. Where Claude renders MCP Apps (web, desktop, mobile), the workspace shows inline. In Claude Code, answer in text with the returned workspace link, and ask which view or record the user means instead of reading the screen selection. |
+
+The repository root also carries .claude-plugin/marketplace.json, so the plugin installs directly from GitHub in Claude Code. `claude plugin validate plugins/claude` and `claude plugin validate .` pass. Before submission, confirm that the Claude MCP route exposes the same tool names the skill uses: read_pipeline, open_pipeline, read_pipeline_followup, read_active_pipeline_selection and the custom-view prepare/create/update tools.
 
 ## Release-candidate verification on November 23
 

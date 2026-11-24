@@ -1,0 +1,8 @@
+{
+  "apps": {
+    "trialagents-pipeline": {
+      "id": "asdk_app_6b0598d346f08191bfdfcb4f9aeea11f",
+      "required": true
+    }
+  }
+}
