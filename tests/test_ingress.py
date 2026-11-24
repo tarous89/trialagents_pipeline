@@ -46,3 +46,17 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.client.post(DISCOVERY)).status_code, 405)
         self.assertEqual((await self.client.post(RESOURCE, content=b"a" * 320001)).status_code, 413)
         self.assertFalse(self.upstream_requests)
+
+    async def test_forwards_modern_discovery_and_tool_routing_headers(self):
+        for method in ("server/discover", "tools/list", "tools/call"):
+            headers = {"Mcp-Protocol-Version": "2026-07-28", "Mcp-Method": method}
+            params = {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28"}}
+            if method == "tools/call":
+                headers["Mcp-Name"] = "read_pipeline"
+                params.update(name="read_pipeline", arguments={})
+            await self.client.post(RESOURCE, headers=headers, json={
+                "jsonrpc": "2.0", "id": 1, "method": method, "params": params,
+            })
+            request, _ = self.upstream_requests[-1]
+            for key, value in headers.items():
+                self.assertEqual(request.headers.get(key), value)

@@ -9,7 +9,7 @@ DISCOVERY = "/.well-known/oauth-protected-resource/pipeline/chatgpt"
 UPSTREAM = "http://intel-agent-app:10000"
 REQUEST_HEADERS = {
     "accept", "authorization", "content-type", "mcp-protocol-version",
-    "mcp-session-id", "last-event-id", "origin",
+    "mcp-method", "mcp-name", "mcp-session-id", "last-event-id", "origin",
 }
 RESPONSE_HEADERS = {
     "allow", "content-type", "www-authenticate", "mcp-session-id",

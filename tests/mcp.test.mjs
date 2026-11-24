@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {randomUUID} from 'node:crypto'
 import {readFile} from 'node:fs/promises'
 import {PGlite} from '@electric-sql/pglite'
+import {PROTOCOL_VERSION_META_KEY,CLIENT_INFO_META_KEY,CLIENT_CAPABILITIES_META_KEY} from '@modelcontextprotocol/server'
 import {pipeline} from '../app/server/store.mjs'
 import {pipelineHttp,protectedResource,resource,metadataPath} from '../mcp/http.mjs'
 import {widgetUri} from '../mcp/tools.mjs'
@@ -18,14 +19,27 @@ test('standalone shared-web MCP authenticates the exact audience and runs the co
    if(lost&&r.op==='assistant.view.create'){lost=false;throw Object.assign(Error('Interrupted'),{status:503})}
    return data
  },readWidget:()=>readFile('dist/pipeline-chatgpt.html','utf8')})
- const request=async(method,params,token='member')=>serve(new Request(resource,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json',accept:'application/json, text/event-stream'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})}))
+ const request=async(method,params,token='member',headers={})=>serve(new Request(resource,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json',accept:'application/json, text/event-stream',...headers},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})}))
  const unauth=await request('tools/list',{},'other');assert.equal(unauth.status,401);assert.ok(unauth.headers.get('www-authenticate').includes(metadataPath))
  assert.equal((await protectedResource().json()).resource,resource)
- async function rpc(method,params){const res=await request(method,params),raw=await res.text();assert.equal(res.status,200,raw)
+ async function rpc(method,params,headers){const res=await request(method,params,'member',headers),raw=await res.text();assert.equal(res.status,200,raw)
    const json=JSON.parse(raw.startsWith('{')?raw:raw.split('\n').find(l=>l.startsWith('data: ')).slice(6));assert.ifError(json.error);return json.result}
  async function call(name,args){const r=await rpc('tools/call',{name,arguments:args});assert.ok(!r.isError,JSON.stringify(r.content));return r}
  const init=await rpc('initialize',{protocolVersion:'2025-11-25',clientInfo:{name:'test',version:'1'},capabilities:{}});assert.equal(init.serverInfo.name,'TrialAgents Pipeline')
  const {tools}=await rpc('tools/list',{});assert.ok(tools.length>=25);assert.ok(tools.every(t=>t.securitySchemes?.[0]?.type==='oauth2'&&t._meta.securitySchemes[0].type==='oauth2'&&t.outputSchema));assert.ok(tools.every(t=>!t.name.includes('billing')))
+ await t.test('modern clients discover, enumerate tools and read a program',async()=>{
+   const version='2026-07-28'
+   const _meta={[PROTOCOL_VERSION_META_KEY]:version,[CLIENT_INFO_META_KEY]:{name:'test',version:'1'},[CLIENT_CAPABILITIES_META_KEY]:{}}
+   async function modern(method,params={}){
+     const headers={'Mcp-Protocol-Version':version,'Mcp-Method':method}
+     if(params.name)headers['Mcp-Name']=params.name
+     return rpc(method,{...params,_meta},headers)
+   }
+   assert.ok(await modern('server/discover'))
+   assert.deepEqual((await modern('tools/list')).tools.map(t=>t.name),tools.map(t=>t.name))
+   const res=await modern('tools/call',{name:'read_pipeline',arguments:{workspace,query:{table:'Program',search:'EX-101',fields:['name','status']}}})
+   assert.equal(res.structuredContent.result.records[0].values.name,'Clinical development of EX-101')
+ })
  const open=await call('open_pipeline',{query:{table:'Milestone',programSearch:'EX-101',fields:['name','end'],order:'end',limit:1}})
  const rows=open.structuredContent.result.data.records;assert.equal(rows[0].values.name,'Site readiness review');assert.doesNotMatch(JSON.stringify(open),/user@example|contacts|billing/)
  const result=async(n,a)=>(await call(n,a)).structuredContent.result
