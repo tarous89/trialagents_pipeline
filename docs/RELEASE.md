@@ -23,7 +23,16 @@ Pipeline owns the app, migrations, worker, MCP descriptors and implementation, w
 
 The production MCP service uses its existing `intel-mcp` entrypoint. From the same pinned checkout, run `python scripts/stage-ingress.py /path/to/shared-mcp-build` before its existing `pip install .` build command. The adapter reuses an HTTP connection to the shared web server at its Render private address, `intel-agent-app:10000`. Only the two exact public paths are forwarded. The two staging scripts operate on disposable build directories, and the Git repositories for the hosting services retain their existing sources.
 
-For the ChatGPT test ZIP, run `python scripts/package-plugins.py --host chatgpt --output dist`. The five positive cases in the manifest can each start in a new chat with a writable personal workspace containing the EX-101 sample. Run them in a dedicated test account. The program case is independent of the seeded example. Production acceptance includes the account connection and a first and subsequent turn in the real ChatGPT host.
+## ChatGPT browser testing and submission
+
+| Deliverable | Build | Contents |
+| --- | --- | --- |
+| Private browser test ZIP | `python scripts/package-plugins.py --host chatgpt --browser-app-id "$PIPELINE_TEST_APP_ID" --output dist` | The manifest points to a required Pipeline registration in `.app.json`. The name contains `chatgpt-browser`. |
+| Public submission ZIP | `python scripts/package-plugins.py --host chatgpt --output dist` | The portable `mcp.json` describes the hosted OAuth endpoint. The manifest includes the five positive and three negative MCP review cases. The name contains `chatgpt-submission`. |
+
+For a private browser test, use ChatGPT on the web in the target account or workspace. In **Plugins → + → Add custom MCP server**, register **TrialAgents Pipeline** with `https://mcp.trialagents.com/pipeline/chatgpt`, OAuth and dynamic client registration. If Pipeline is already registered in that account, reuse its connection. Verify its URL and copy its actual app ID into `PIPELINE_TEST_APP_ID` when building. Intel's November 6 browser test succeeded with this app-reference layout after a portable ZIP imported as desktop-only. An Intel ID or an independently uploaded desktop plugin ID cannot identify the Pipeline connection.
+
+Import the private browser ZIP and connect a writable personal workspace containing the fictional EX-101 example. In ChatGPT web, try the program, milestone, deliverable, change and activity prompts from the submission manifest, each in a fresh chat. Confirm one inline workspace on the first response and an appropriate text, link or workspace follow-up. Record the result for the exact ZIP version and test account.
 
 ## Candidate checks
 
