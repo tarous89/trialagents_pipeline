@@ -9,7 +9,11 @@ import {pipelineHttp} from '@/app/lib/pipeline/pipeline-mcp.cjs';
 export const runtime='nodejs';
 export const dynamic='force-dynamic';
 let widget:Promise<string>|undefined;
-const readWidget=()=>widget??=readFile(path.join(process.cwd(),'public/pipeline-assets/pipeline-chatgpt.html'),'utf8').catch(error=>{widget=undefined;throw error});
+const readWidget=()=>widget??=readFile(path.join(process.cwd(),'public/pipeline-assets/pipeline-claude.html'),'utf8').catch(error=>{widget=undefined;throw error});
+// The shared MCP handler declares the ChatGPT widget domain. Claude expects its own
+// sandbox host for this server URL, so Claude responses carry that host instead.
+const sharedDomain='"domain":"https://pipeline.trialagents.com"';
+const claudeDomain='"domain":"'+createHash('sha256').update(pipelineResource(true)).digest('hex').slice(0,32)+'.claudemcpcontent.com"';
 async function endpoint(request:Request){
  if(process.env.PIPELINE_ENABLED!=='true'||process.env.PIPELINE_MCP_ENABLED!=='true')return new Response(null,{status:404});
  const serve=pipelineHttp({audience:pipelineResource(true),readWidget,selection,run:runPipeline,authorize:async(token:string,audience:string)=>{
@@ -18,6 +22,10 @@ async function endpoint(request:Request){
    const [user]=await getSql()`SELECT id,email,first_name AS "firstName",last_name AS "lastName" FROM users WHERE id=${info.sub}`;
    return user?{...user,accessDigest:createHash('sha256').update(token).digest('hex')}:null;
  }});
- return serve(request);
+ const response=await serve(request);
+ if(request.method!=='POST'||!response.body)return response;
+ const text=await response.text();
+ const headers=new Headers(response.headers);headers.delete('content-length');
+ return new Response(text.split(sharedDomain).join(claudeDomain),{status:response.status,headers});
 }
 export {endpoint as GET,endpoint as POST,endpoint as DELETE};
