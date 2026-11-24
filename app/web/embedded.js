@@ -43,14 +43,15 @@ function grant(workspace){
  }
  return grants.get(workspace)
 }
-window.pipelineTransport=async request=>{
- const send=async secret=>fetch('/api/pipeline/frame',{method:'POST',mode:'same-origin',credentials:'omit',referrerPolicy:'strict-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-Pipeline-Surface':'workspace','Authorization':'Pipeline-Frame '+secret},body:JSON.stringify(request)})
+window.pipelineTransport=async (request,signal)=>{
+ const send=async secret=>fetch('/api/pipeline/frame',{method:'POST',signal,mode:'same-origin',credentials:'omit',referrerPolicy:'strict-origin',cache:'no-store',headers:{'Content-Type':'application/json','X-Pipeline-Surface':'workspace','Authorization':'Pipeline-Frame '+secret},body:JSON.stringify(request)})
  const current=grant(request.workspace)
  let res=await send(await current)
  if(res.status===401){
    if(grants.get(request.workspace)===current)grants.delete(request.workspace)
    res=await send(await grant(request.workspace))
  }
+ if(request.op==='workspace.events')return res
  const result=await res.json()
  if(!res.ok)throw Object.assign(Error(result.error||'Pipeline request failed'),{status:res.status})
  return result

@@ -2,28 +2,77 @@ let state, busy=false, sectionData=null, selectedView='', viewSearch='', viewAut
 const originalNames={...names};
 const model=()=>[...data,...orgDb.map(r=>({...r,type:'Organization'}))];
 let baselineItems=new Map(),syncTimer,syncGeneration=0,lastConfirmed='';
-function scheduleWorkspaceRefresh(immediate=false){
+let watch=null,retryStream,streamReady=false;
+function stopStream(){
+ clearTimeout(retryStream);
+ watch?.controller.abort();watch=null;streamReady=false;
+}
+function watchWorkspace(){
+ const workspace=state?.workspace;
+ if(document.hidden||!workspace){stopStream();return}
+ if(watch?.workspace===workspace)return;
+ stopStream();
+ // Older assistant hosts only support JSON RPC and keep using revision polling.
+ if(window.pipelineHost&&!window.pipelineChatGPT)return;
+ const controller=new AbortController();
+ const connection={workspace,controller};watch=connection;
+ async function connect(){
+   let timeout,reader,connected=false;
+   const watchdog=ms=>{clearTimeout(timeout);timeout=setTimeout(()=>controller.abort(),ms)};
+   try{
+     watchdog(15000);
+     const response=await window.pipelineTransport({op:'workspace.events',workspace},controller.signal);
+     if(!response?.ok||!response.headers?.get('content-type')?.startsWith('text/event-stream')){
+       await response?.body?.cancel();return;
+     }
+     reader=response.body.getReader();
+     const decoder=new TextDecoder();let pending='';
+     while(watch===connection){
+       const {value,done}=await reader.read();if(done)break;
+       watchdog(35000);
+       pending+=decoder.decode(value,{stream:true});
+       const events=pending.split('\n\n');pending=events.pop();
+       if(events.some(event=>event==='data: ready'||event==='data: changed')){
+         connected=true;streamReady=true;scheduleWorkspaceRefresh(true);
+       }
+     }
+   }catch{/* Revision polling covers unsupported, interrupted and buffered streams. */}
+   finally{
+     clearTimeout(timeout);await reader?.cancel().catch(()=>{});
+     if(watch===connection){
+       streamReady=false;if(connected)scheduleWorkspaceRefresh(true);
+       retryStream=setTimeout(()=>{watch=null;watchWorkspace()},connected?250:5000);
+     }
+   }
+ }
+ void connect();
+}
+window.addEventListener('pagehide',stopStream);
+window.addEventListener('pageshow',()=>{watchWorkspace();scheduleWorkspaceRefresh(true)});
+function scheduleWorkspaceRefresh(immediate=false,retry=false){
  clearTimeout(syncTimer);
  const generation=++syncGeneration;
- if(!state||document.hidden)return;
+ if(!state||document.hidden||(!immediate&&!retry&&streamReady&&!busy))return;
  syncTimer=setTimeout(async()=>{
    const previous=state;
    if(!previous)return;
-   const revision=previous.revision;
+   const revision=previous.revision;let retryCheck=false;
    try{
-     if(busy)return;
+     if(busy){retryCheck=true;return}
      const snapshot=await rpc('bootstrap',{knownRevision:revision,knownRole:previous.role,knownTeam:previous.team,accessOnly:tab==='Settings'});
-     if(generation!==syncGeneration||state!==previous||state.revision!==revision||busy||!snapshot.items)return;
+     if(generation!==syncGeneration)return;
+     if(state!==previous||state.revision!==revision||busy){retryCheck=true;return}
+     if(!snapshot.items)return;
      applyLiveSnapshot(snapshot);
    }catch(error){
      if(generation!==syncGeneration||state!==previous)return;
      if([401,403].includes(error.status)){
-       state=null;el('drawer').close();el('app').replaceChildren();el('rail').replaceChildren();notify(error.message);
-     }else if(immediate)notify(error.message);
-   }finally{if(generation===syncGeneration)scheduleWorkspaceRefresh()}
+       state=null;stopStream();el('drawer').close();el('app').replaceChildren();el('rail').replaceChildren();notify(error.message);
+     }else{retryCheck=true;if(immediate)notify(error.message)}
+   }finally{if(generation===syncGeneration)scheduleWorkspaceRefresh(false,retryCheck)}
  },immediate?0:5000);
 }
-document.addEventListener('visibilitychange',()=>scheduleWorkspaceRefresh(true));
+document.addEventListener('visibilitychange',()=>{watchWorkspace();scheduleWorkspaceRefresh(true)});
 window.addEventListener('focus',()=>scheduleWorkspaceRefresh(true));
 
 function applyLiveSnapshot(snapshot){
@@ -53,7 +102,7 @@ function notify(message,success=false){
 }
 function hydrate(snapshot){
   if(state?.workspace!==snapshot.workspace){viewSearch='';viewAuthor='';viewProgram='';lastConfirmed='';selectedView=''}
-  state=snapshot;for(const id of Object.keys(names))delete names[id];Object.assign(names,originalNames);
+  state=snapshot;watchWorkspace();for(const id of Object.keys(names))delete names[id];Object.assign(names,originalNames);
   for(const t of state.tabs)names[t.builtin||'custom-'+t.id]=t.label;
   data=structuredClone(state.items.filter(r=>r.type!=='Organization').map(r=>({...r,start:r.start??'',end:r.end??'',owner:r.owner??''})));
   orgDb=structuredClone(state.items.filter(r=>r.type==='Organization'));

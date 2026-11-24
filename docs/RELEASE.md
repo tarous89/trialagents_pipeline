@@ -49,3 +49,9 @@ The browser and embedded builds share the Pipeline shell, styles, navigation, pl
 The MCP component frames the app at `https://pipeline.trialagents.com/pipeline-embedded`. This keeps portfolio and account data on the first-party origin. The model receives the scoped tool projection. The frame creates a random secret in memory and sends its SHA-256 digest to the app-only `connect_pipeline_frame` tool. The first-party API verifies the corresponding grant, workspace, current membership and unrevoked OAuth token on use. The frame can renew a ten-minute grant while the OAuth connection remains valid. The renderer for authored content stays on the same allowlisted origin in its own isolated sandbox.
 
 After deploying, refresh tools on the existing private MCP connection if its cached tool list predates the frame operation. Start a new ChatGPT conversation and ask for program status. Verify the overview cards, navigation, both sidebar states, the record drawer and a saved view. Open the web app from the header and compare the same tab or view.
+
+## Live workspace updates
+
+The browser and first-party ChatGPT frame subscribe to a workspace-scoped event stream through their existing authenticated Pipeline endpoints. The worker applies the notification trigger in `schema.sql`. PostgreSQL publishes the signal on commit. Each open workspace checks its revision after a signal, on connection, and when it regains focus. If the trigger or stream is unavailable, visible workspaces use five-second revision polling while reconnecting.
+
+For a hosted release check, keep the same workspace open in the browser and ChatGPT, then add a record from chat. Verify both views update. In the browser network inspector the `workspace.events` request should receive `text/event-stream` events progressively through the production proxy.

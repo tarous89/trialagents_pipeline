@@ -3,7 +3,8 @@ import {authenticatedUser} from '@/app/lib/auth';
 import {introspectAccessToken} from '@/app/lib/oauth-server';
 import {oauthResource} from '@/app/lib/oauth-config';
 import {getSql} from '@/db';
-import {runPipeline} from '@/app/lib/pipeline/adapter';
+import {workspaceEvents} from '@/app/lib/pipeline/events.mjs';
+import {runPipeline,listenWorkspace} from '@/app/lib/pipeline/adapter';
 export const runtime='nodejs';
 const reply=(body:unknown,status=200)=>NextResponse.json(body,{status,headers:{'Cache-Control':'private, no-store','Vary':'Authorization, Cookie'}});
 export async function POST(request:NextRequest){
@@ -29,6 +30,14 @@ export async function POST(request:NextRequest){
     let size=0;const chunks:Uint8Array[]=[];
     for(;;){const {done,value}=await reader.read();if(done)break;size+=value.byteLength;if(size>cap){await reader.cancel();return reply({error:'Save fewer attachments at once'},413)}chunks.push(value);}
     let input;try{input=JSON.parse(Buffer.concat(chunks).toString('utf8'))}catch{return reply({error:'Invalid JSON'},400)}
+    if(input?.op==='workspace.events'&&source==='web'){
+      const userId=user.id;
+      return await workspaceEvents(input.workspace,request.signal,listenWorkspace,async()=>{
+        const current=await authenticatedUser(request);
+        if(!current||current.id!==userId)throw Object.assign(Error('Sign in to Pipeline'),{status:401});
+        return runPipeline(current,{op:'workspace.access',workspace:input.workspace},source);
+      });
+    }
     return reply(await runPipeline(user,input,source));
   }catch(e){const error=e as {status?:number;message?:string};return reply({error:error.status?error.message:'Pipeline could not complete the request'},error.status??500);}
 }

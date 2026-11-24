@@ -3,6 +3,15 @@ import {stripeRequest,stripeMode} from '@/app/lib/stripe';
 import {pipeline} from './store.mjs';
 import {stripeBilling} from './billing.mjs';
 import {selectionRelay} from './selection.mjs';
+import type {Listen} from './events.mjs';
+export const listenWorkspace:Listen=async(channel,notify,ready)=>{
+ const sql=getSql();
+ const [trigger]=await sql`SELECT 1 FROM pg_trigger WHERE tgrelid='pipeline.workspace'::regclass
+   AND tgname='pipeline_workspace_change' AND tgenabled IN ('O','A')`;
+ if(!trigger)throw Object.assign(Error('Workspace updates are starting'),{status:503});
+ const sub=await sql.listen(channel,notify,ready);
+ return {unlisten:async()=>{await sub.unlisten()}};
+};
 export const selection=selectionRelay({
  listen:async(channel,listener)=>{
    const sub=await getSql().listen(channel,listener);

@@ -51,7 +51,7 @@ async function viewList(q,w){
 }
 const writeOps=new Set(['examples.remove','items.save','settings.save','preferences.save','view.save','view.remove','design.save','team.invite','team.revoke','team.member'])
 const ownerOps=new Set(['settings.save','design.save','team.invite','team.revoke','team.member','team.list','billing.checkout','billing.portal'])
-const memberOps=new Set(['bootstrap','records.read','view.read','logs','attachment.get','preferences.save','view.list'])
+const memberOps=new Set(['workspace.access','bootstrap','records.read','view.read','logs','attachment.get','preferences.save','view.list'])
 const defaultSettings={currency:'EUR',dateFormat:'short',window:90,days:7}
 export function pipeline(db,{origin='https://pipeline.trialagents.com',billing}={}){
   return async function execute(user,request,source='web'){
@@ -131,6 +131,7 @@ export function pipeline(db,{origin='https://pipeline.trialagents.com',billing}=
             const query=input.query??defaults[tab]??{table:({Milestones:'Milestone',Timeline:'Activity',Deliverables:'Deliverable',Risks:'Risk',Changes:'Change'})[tab]||'Program'}
             return {...base,url:link(w,{tab,...input.query?.table&&{table:query.table},...query.id&&{record:query.id}}),data:await readRows(q,m,query)}
           }
+          case 'workspace.access':return {workspace:w}
           case 'bootstrap': {
             if((input.accessOnly===true||input.knownRevision===m.revision)&&input.knownRole===m.role&&input.knownTeam===Boolean(paid(m)))return {revision:m.revision}
             const assignableMembers=m.role==='reader'?[]:await q("SELECT user_id AS id,display_name AS name,email FROM pipeline.member WHERE workspace_id=$1 AND (role='owner' OR $2) ORDER BY display_name,email",[w,Boolean(paid(m))])
