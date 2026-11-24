@@ -22,6 +22,8 @@ const visible = m => ({id:m.id,title:m.title,role:m.role,team:Boolean(paid(m))})
 const sqlMember = `SELECT w.*,m.role,m.preferences FROM pipeline.workspace w JOIN pipeline.member m ON m.workspace_id=w.id WHERE w.id=$1 AND m.user_id=$2`
 const one = async (q,s,p) => (await q(s,p))[0]
 const safeItem = x => x && Object.fromEntries(Object.entries(x).filter(([k])=>!['files','approved'].includes(k)))
+// ChatGPT and Claude follow the same assistant rules. The source still names the assistant in audit history.
+const assistant=source=>source==='ChatGPT'||source==='Claude'
 async function audit(q,w,u,source,action,target,details={}){
   await q('INSERT INTO pipeline.audit(workspace_id,actor,actor_name,source,action,target,details) VALUES($1,$2,$3,$4,$5,$6,$7)',[w,u.id,person(u),source,action,target,json(details)])
 }
@@ -57,14 +59,14 @@ export function pipeline(db,{origin='https://pipeline.trialagents.com',billing}=
   return async function execute(user,request,source='web'){
     check(user?.id&&user.email,'Sign in to Pipeline',401)
     check(request && typeof request.op==='string','Invalid request')
-    const fromWorkspace=source==='ChatGPT workspace'
+    const fromWorkspace=source==='ChatGPT workspace'||source==='Claude workspace'
     if(fromWorkspace){
       check(workspaceOperations.includes(request.op),'Unavailable workspace action',403)
       check(uuid(request.workspace),'Choose a workspace')
-      source='ChatGPT'
+      source=source.slice(0,-' workspace'.length)
     }
     if(['assistant.view.create','assistant.view.update','assistant.view.retry'].includes(request.op)){
-      check(source==='ChatGPT','Author shared views through the connected assistant',403)
+      check(assistant(source),'Author shared views through the connected assistant',403)
       const retry=request.op==='assistant.view.retry'
       const payload=await db.transaction(async q=>{
         const m=await membership(q,request.workspace,user,true)
@@ -101,14 +103,14 @@ export function pipeline(db,{origin='https://pipeline.trialagents.com',billing}=
         check(grant,'Open the workspace again',409)
         return {workspace:request.workspace}
       }
-      if(source==='ChatGPT'&&!fromWorkspace)check(assistantReads.has(op)||assistantWrites.has(op)||['team.invite','design.save'].includes(op),'Unavailable in Pipeline for ChatGPT',403)
+      if(assistant(source)&&!fromWorkspace)check(assistantReads.has(op)||assistantWrites.has(op)||['team.invite','design.save'].includes(op),'Unavailable in Pipeline for '+source,403)
       if(op==='team.accept')return accept(q,user,input,source)
       const home=(!request.workspace&&assistantReads.has(op))?await one(q,'SELECT id FROM pipeline.workspace WHERE owner_id=$1',[user.id]):null
       if(!request.workspace&&assistantReads.has(op))check(home,'Reconnect to initialize your personal workspace',409)
       const w=request.workspace || home?.id || (['bootstrap','records.read'].includes(op) && await ensureHome(q,user))
       const write=writeOps.has(op)||assistantWrites.has(op)
       const m=await membership(q,w,user,write||op.startsWith('billing.'))
-      if(op==='team.invite'&&source==='ChatGPT')check(m.role==='owner'&&paid(m),'Invitations are unavailable in this workspace',403)
+      if(op==='team.invite'&&assistant(source))check(m.role==='owner'&&paid(m),'Invitations are unavailable in this workspace',403)
       if(ownerOps.has(op)||schemaOps.has(op)||op==='assistant.impact')check(m.role==='owner','Workspace owner required',403)
       else if(!memberOps.has(op)&&!assistantReads.has(op))check(m.role!=='reader','Read-only workspace access',403)
       if(!write){
@@ -242,7 +244,7 @@ export function pipeline(db,{origin='https://pipeline.trialagents.com',billing}=
           await audit(q,w,user,source,op,w,{before:{title:m.title,accent:m.accent,tabs:m.tabs},after:input});break
         }
         case 'team.invite':{
-          check(paid(m),source==='ChatGPT'?'Invitations are unavailable in this workspace':'Pipeline Team subscription required',source==='ChatGPT'?403:402)
+          check(paid(m),assistant(source)?'Invitations are unavailable in this workspace':'Pipeline Team subscription required',assistant(source)?403:402)
           const email=String(input.email??'').trim().toLowerCase()
           check(email.length<=254&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)&&['editor','reader'].includes(input.role),'Enter an email and role')
           check(!(await one(q,'SELECT 1 FROM pipeline.member WHERE workspace_id=$1 AND email=$2',[w,email])),'Already a member',409)
@@ -326,7 +328,7 @@ async function saveItems(q,w,u,source,input,m){
     next.set(r.id,r)
   }
   validatePortfolio([...next.values()])
-  if(source==='ChatGPT'){
+  if(assistant(source)){
     const all=[...next.values()],exposure=riskExposure(all)
     const deliverables=new Set(all.filter(r=>r.type==='Deliverable').flatMap(r=>r.parents))
     for(const record of all){
@@ -359,7 +361,7 @@ async function saveItems(q,w,u,source,input,m){
       for(const f of was?.files??[])if(!files.some(v=>v.id===f.id))await q('DELETE FROM pipeline.file WHERE workspace_id=$1 AND item_id=$2 AND id=$3',[w,id,f.id])
     }else await q('DELETE FROM pipeline.item WHERE workspace_id=$1 AND id=$2',[w,id])
     await audit(q,w,u,source,r?(was?'record.updated':'record.created'):'record.deleted',id,{before:safeItem(was),after:safeItem(r),attachments:r?.files?.map(f=>f.name),approval:r?.approved})
-    if(!r?.example&&(source!=='ChatGPT'||!r||upsert.some(changed=>changed.id===id)))await scheduleMail(q,w,m,r,was,next)
+    if(!r?.example&&(!assistant(source)||!r||upsert.some(changed=>changed.id===id)))await scheduleMail(q,w,m,r,was,next)
   }
 }
 async function scheduleMail(q,w,m,r,was,items){

@@ -21,6 +21,8 @@ for host in ((args.host,) if args.host else ("chatgpt", "claude")):
     payload = {}
     for directory in ("shared", host):
         base = ROOT / "plugins" / directory
+        if not base.is_dir():
+            continue
         for path in base.rglob("*"):
             if path.is_file() and not path.is_symlink():
                 payload[path.relative_to(base).as_posix()] = path.read_bytes()
@@ -45,7 +47,12 @@ for host in ((args.host,) if args.host else ("chatgpt", "claude")):
     else:
         manifest = json.loads(payload[".claude-plugin/plugin.json"])
         artwork = [manifest["icon"]]
-        assert json.loads(payload[".mcp.json"])["mcpServers"]["trialagents-pipeline"]["url"].endswith("/pipeline-claude/mcp")
+        server = json.loads(payload[".mcp.json"])["mcpServers"]["trialagents-pipeline"]
+        assert server == {"type": "http", "url": "https://mcp.trialagents.com/pipeline/claude"}
+        assert "skills/manage-pipeline/SKILL.md" in payload
+        assert payload[manifest["icon"]] == (ROOT / "assets" / "claude-mark.png").read_bytes()
+        listing = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_bytes())
+        assert listing["plugins"][0]["version"] == manifest["version"]
     for path in artwork:
         source = "claude-mark.png" if host == "claude" else "mark-dark.png" if "dark" in path else "mark-light.png"
         payload[path] = (ROOT / "assets" / source).read_bytes()

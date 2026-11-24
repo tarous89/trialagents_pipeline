@@ -1,6 +1,6 @@
 # TrialAgents Pipeline
 
-This repository owns the Pipeline web application, PostgreSQL schema, ChatGPT MCP server, interactive workspace, plugin manifest, onboarding skill and artwork. Pipeline runs on the existing TrialAgents Render web service and uses the existing application database. Its ChatGPT tools call the same workspace store as the browser inside the same Node process.
+This repository owns the Pipeline web application, PostgreSQL schema, ChatGPT and Claude MCP server, interactive workspace, plugin manifest, onboarding skill and artwork. Pipeline runs on the existing TrialAgents Render web service and uses the existing application database. Its ChatGPT tools call the same workspace store as the browser inside the same Node process.
 
 | Component | Source |
 | --- | --- |
@@ -8,6 +8,7 @@ This repository owns the Pipeline web application, PostgreSQL schema, ChatGPT MC
 | Workspace database, permissions, queries and writes | [app/server](app/server) |
 | ChatGPT Streamable HTTP server and tool contracts | [mcp](mcp) |
 | ChatGPT manifest, connection and skill | [plugins/chatgpt](plugins/chatgpt) |
+| Claude plugin manifest, connection and skill | [plugins/claude](plugins/claude) · install with `/plugin install trialagents-pipeline --marketplace tarous89/trialagents_pipeline` |
 | Integration with the shared web host and account system | [integration/shared-web](integration/shared-web) |
 | Build, verification and deployment routing | [docs/RELEASE.md](docs/RELEASE.md) |
 
