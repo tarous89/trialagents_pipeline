@@ -8,7 +8,7 @@ import {runPipeline,listenWorkspace} from '@/app/lib/pipeline/adapter';
 export const runtime='nodejs';
 const reply=(body:unknown,status=200)=>NextResponse.json(body,{status,headers:{'Cache-Control':'private, no-store','Vary':'Authorization, Cookie'}});
 export async function POST(request:NextRequest){
-  if(process.env.PIPELINE_ENABLED!=='true')return reply({error:'Pipeline unavailable'},404);
+  if(process.env.PIPELINE_ENABLED==='false')return reply({error:'Pipeline unavailable'},404);
   try{
     const bearer=request.headers.get('authorization');
     let user,source='web';

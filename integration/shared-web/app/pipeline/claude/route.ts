@@ -15,7 +15,7 @@ const readWidget=()=>widget??=readFile(path.join(process.cwd(),'public/pipeline-
 const sharedDomain='"domain":"https://pipeline.trialagents.com"';
 const claudeDomain='"domain":"'+createHash('sha256').update(pipelineResource(true)).digest('hex').slice(0,32)+'.claudemcpcontent.com"';
 async function endpoint(request:Request){
- if(process.env.PIPELINE_ENABLED!=='true'||process.env.PIPELINE_MCP_ENABLED!=='true')return new Response(null,{status:404});
+ if(process.env.PIPELINE_ENABLED==='false'||process.env.PIPELINE_MCP_ENABLED==='false')return new Response(null,{status:404});
  const serve=pipelineHttp({audience:pipelineResource(true),readWidget,selection,run:runPipeline,authorize:async(token:string,audience:string)=>{
    const info=await introspectAccessToken(token);
    if(!info.active||!info.sub||info.resource!==audience||!String(info.scope).split(' ').includes('mcp:tools'))return null;
