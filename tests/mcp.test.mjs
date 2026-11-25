@@ -125,5 +125,9 @@ test('Claude uses its own audience and route, the same tools, and is recorded as
  assert.ok(['open_pipeline','read_pipeline','read_pipeline_followup','read_active_pipeline_selection','create_pipeline_view','update_pipeline_view'].every(n=>tools.some(tool=>tool.name===n)))
  const read=await rpc('tools/call',{name:'read_pipeline',arguments:{workspace}})
  assert.ok(!read.isError,JSON.stringify(read.content))
+ // claude.ai shows the model the text block, so it must carry the records and continuation context.
+ const shown=JSON.parse(read.content[0].text)
+ assert.deepEqual(shown,read.structuredContent)
+ assert.ok(shown.result.workspace_context&&Array.isArray(shown.result.records))
  assert.ok(sources.length&&sources.every(s=>s==='Claude'))
 })
