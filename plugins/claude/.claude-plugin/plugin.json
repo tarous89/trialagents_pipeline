@@ -1,19 +1,19 @@
 {
   "name": "trialagents-pipeline",
   "displayName": "TrialAgents Pipeline",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Manage your biotech pipeline from Claude. Track programs, milestones, activities, deliverables and changes in a shared workspace.",
   "icon": ".claude-plugin/icon.png",
   "author": {
     "name": "Atlas Consulting",
-    "email": "intel@trialagents.com",
+    "email": "contact@trialagents.com",
     "url": "https://trialagents.com"
   },
   "homepage": "https://pipeline.trialagents.com/pipeline-info/about",
   "privacyPolicyUrl": "https://pipeline.trialagents.com/pipeline-info/privacy",
   "termsOfServiceUrl": "https://pipeline.trialagents.com/pipeline-info/terms",
   "supportUrl": "https://pipeline.trialagents.com/pipeline-info/support",
-  "documentationUrl": "https://github.com/tarous89/trialagents_pipeline/blob/main/docs/RELEASE.md",
+  "documentationUrl": "https://pipeline.trialagents.com/pipeline-info/connectors",
   "repository": "https://github.com/tarous89/trialagents_pipeline",
   "license": "Proprietary",
   "keywords": [

@@ -21,7 +21,11 @@ test('standalone shared-web MCP authenticates the exact audience and runs the co
  },readWidget:()=>readFile('dist/pipeline-chatgpt.html','utf8')})
  const request=async(method,params,token='member',headers={})=>serve(new Request(resource,{method:'POST',headers:{authorization:'Bearer '+token,'content-type':'application/json',accept:'application/json, text/event-stream',...headers},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params})}))
  const unauth=await request('tools/list',{},'other');assert.equal(unauth.status,401);assert.ok(unauth.headers.get('www-authenticate').includes(metadataPath))
- assert.equal((await protectedResource().json()).resource,resource)
+ const discovery=await protectedResource().json()
+ assert.equal(discovery.resource,resource)
+ assert.equal(discovery.resource_documentation,'https://pipeline.trialagents.com/pipeline-info/connectors')
+ assert.equal(discovery.resource_policy_uri,'https://pipeline.trialagents.com/pipeline-info/privacy')
+ assert.equal(discovery.resource_tos_uri,'https://pipeline.trialagents.com/pipeline-info/terms')
  async function rpc(method,params,headers){const res=await request(method,params,'member',headers),raw=await res.text();assert.equal(res.status,200,raw)
    const json=JSON.parse(raw.startsWith('{')?raw:raw.split('\n').find(l=>l.startsWith('data: ')).slice(6));assert.ifError(json.error);return json.result}
  let context
@@ -127,7 +131,9 @@ test('Claude uses its own audience and route, the same tools, and is recorded as
  assert.equal((await post(resource,'tools/list',{})).status,404)
  const unauth=await post(claudeResource,'tools/list',{},'other');assert.equal(unauth.status,401)
  assert.ok(unauth.headers.get('www-authenticate').includes('https://mcp.trialagents.com/.well-known/oauth-protected-resource/pipeline/claude'))
- assert.equal((await protectedResource(undefined,claudeResource).json()).resource,claudeResource)
+ const discovery=await protectedResource(undefined,claudeResource).json()
+ assert.equal(discovery.resource,claudeResource)
+ assert.equal(discovery.resource_documentation,'https://pipeline.trialagents.com/pipeline-info/connectors')
  const rpc=async(method,params)=>{const raw=await (await post(claudeResource,method,params)).text()
    const json=JSON.parse(raw.startsWith('{')?raw:raw.split('\n').find(l=>l.startsWith('data: ')).slice(6));assert.ifError(json.error);return json.result}
  const {tools}=await rpc('tools/list',{})

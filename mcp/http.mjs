@@ -16,7 +16,12 @@ const chatgptResourceMeta={'openai/ui':{availableDisplayModes:['inline','fullscr
 const claudeResourceMeta={ui:{domain:origin,csp:{connectDomains:[],resourceDomains:[]}}}
 const legacyWidgets=['ui://trialagents-pipeline/chatgpt-workspace-v4.html','ui://trialagents-pipeline/chatgpt-workspace-v3.html','ui://trialagents-pipeline/chatgpt-workspace-v2.html']
 export function protectedResource(issuer='https://intel.trialagents.com/oauth/intel',audience=resource){
- return Response.json({resource:audience,authorization_servers:[issuer],scopes_supported:['mcp:tools'],bearer_methods_supported:['header']},{headers:{'Cache-Control':'no-store'}})
+ return Response.json({
+   resource:audience,authorization_servers:[issuer],scopes_supported:['mcp:tools'],bearer_methods_supported:['header'],
+   resource_documentation:origin+'/pipeline-info/connectors',
+   resource_policy_uri:origin+'/pipeline-info/privacy',
+   resource_tos_uri:origin+'/pipeline-info/terms'
+ },{headers:{'Cache-Control':'no-store'}})
 }
 export function pipelineHttp({authorize,run,readWidget,selection,audience=resource}){
  return async request=>{

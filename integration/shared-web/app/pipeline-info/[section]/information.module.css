@@ -44,6 +44,18 @@
   text-wrap: balance;
 }
 
+.copy h2 {
+  margin: 36px 0 12px;
+  color: var(--heading);
+  font-size: clamp(23px, 4vw, 30px);
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+}
+
+.copy code {
+  font-size: 0.94em;
+}
+
 .copy p {
   margin: 0 0 22px;
   color: var(--copy);
