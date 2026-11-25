@@ -1,5 +1,5 @@
 ---
-name: manage-pipeline
+name: pipeline
 description: Work with biotech programs, milestones, decisions and shared views in a connected TrialAgents Pipeline workspace. Use whenever the user mentions TrialAgents Pipeline, their pipeline workspace, or asks to view, add or change programs, milestones, activities, deliverables, changes, dependencies or custom views there.
 ---
 

@@ -13,7 +13,7 @@
       "name": "trialagents-pipeline",
       "source": "./plugins/claude",
       "description": "Manage your biotech pipeline from Claude. Track programs, milestones, activities, deliverables and changes in a shared workspace.",
-      "version": "0.3.0"
+      "version": "0.3.1"
     }
   ]
 }

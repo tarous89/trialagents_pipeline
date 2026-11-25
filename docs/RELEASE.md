@@ -56,7 +56,7 @@ Member notifications use workspace membership and recipient preferences. An emai
 
 ## Claude plugin
 
-The Claude plugin in `plugins/claude` is version 0.3.0 and uses the `assets/claude-mark.png` icon. The two plugins share the same workspace roles, publisher and support URLs. Claude’s skill and MCP tools are described under **Claude tools and approvals**.
+The Claude plugin in `plugins/claude` is version 0.3.1, has one skill named `pipeline` and uses the `assets/claude-mark.png` icon. The two plugins share the same workspace roles, publisher and support URLs. Claude’s skill and MCP tools are described under **Claude tools and approvals**.
 
 | ChatGPT | Claude |
 | --- | --- |

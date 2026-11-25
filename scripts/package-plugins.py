@@ -49,7 +49,7 @@ for host in ((args.host,) if args.host else ("chatgpt", "claude")):
         artwork = [manifest["icon"]]
         server = json.loads(payload[".mcp.json"])["mcpServers"]["trialagents-pipeline"]
         assert server == {"type": "http", "url": "https://mcp.trialagents.com/pipeline/claude"}
-        assert "skills/manage-pipeline/SKILL.md" in payload
+        assert "skills/pipeline/SKILL.md" in payload
         assert payload[manifest["icon"]] == (ROOT / "assets" / "claude-mark.png").read_bytes()
         listing = json.loads((ROOT / ".claude-plugin" / "marketplace.json").read_bytes())
         assert listing["plugins"][0]["version"] == manifest["version"]
