@@ -44,13 +44,13 @@ Authored views load the Pipeline-owned renderer on demand. The parent sanitizes 
 
 ## Claude plugin
 
-The Claude plugin in `plugins/claude` mirrors ChatGPT 0.2.5. It uses the same name, version, author, legal and support URLs, keywords and skill rules, and the `assets/claude-mark.png` icon. Only host details differ:
+The Claude plugin in `plugins/claude` is version 0.3.0. It uses the same name, author, legal and support URLs and keywords as ChatGPT 0.2.5, and the `assets/claude-mark.png` icon. Its tools and skill differ as described under **Claude tools and approvals**. Host details:
 
 | ChatGPT | Claude |
 | --- | --- |
 | `plugin.json` with the `com.openai` interface, review cases and release notes | `.claude-plugin/plugin.json` with display name, icon and legal/support URLs. Starter prompts, review cases and release notes go in the Claude directory submission form. |
 | `mcp.json` (`/pipeline/chatgpt`), or `.app.json` for the private browser test | `.mcp.json` with a remote HTTP server at `https://mcp.trialagents.com/pipeline/claude`. Claude discovers OAuth from that endpoint's resource metadata and registers dynamically. |
-| Skill: display the workspace in the same reply | Same rules. Claude web, desktop and mobile render the workspace inline. Claude Code answers in text with the returned workspace link and asks which view or record is meant. |
+| Skill: display the workspace in the same reply | Same display rules, with the Claude write tools `edit_pipeline_records` and `change_pipeline_app`. Claude web, desktop and mobile render the workspace inline. Claude Code answers in text with the returned workspace link and asks which view or record is meant. |
 
 Build it with `python scripts/package-plugins.py --host claude --output dist`. The repository root also has `.claude-plugin/marketplace.json`, so Claude Code can install it with `/plugin install trialagents-pipeline --marketplace tarous89/trialagents_pipeline`. Check it with `claude plugin validate plugins/claude`.
 
@@ -63,6 +63,15 @@ How the Claude view works:
 - **Authored views.** They render in a `blob:` copy of the renderer page that ships inside the bundle.
 - **Account pages.** Personal, Support and Billing open on the website.
 - **Resource.** The view is served as `ui://trialagents-pipeline/claude-workspace-v1.html` and declares no frame, connect or resource domains. The route still replaces `ui.domain` with Claude's sandbox host for this server, `902202f9dd8f7b5c489c362d072e95f2.claudemcpcontent.com`.
+
+**Claude tools and approvals.** The Claude route lists fewer tools than ChatGPT, so users approve two kinds of change. Every tool has a `title`.
+
+- **Read-only (`readOnlyHint: true`), no approval:** `open_pipeline`, `read_pipeline`, `read_pipeline_followup`, `read_active_pipeline_selection`, `get_pipeline_schema`, `preview_pipeline_archive`, `prepare_pipeline_view`, `read_pipeline_view` and `list_pipeline_views`.
+- **`edit_pipeline_records`** (`destructiveHint`, `openWorldHint`): `action` is `create`, `update` or `delete`, for one business record. Assignment and deadline changes may email workspace members.
+- **`change_pipeline_app`** (`destructiveHint`): custom tables, columns and relationships (add, update, archive, restore), workspace design (`customize`), and custom views (`create_view`, `update_view`, `retry_view`). It presents the workspace: saved views open on the view, other changes on Settings.
+- **`pipeline_workspace_request`:** app-only. Calls the panel makes never prompt. Invitations and other panel actions are the user's own clicks.
+
+These replace the individual write tools on the Claude route, in the Claude skill and in the Claude plugin ZIP. Both run the same handlers as the ChatGPT tools, whose list is unchanged.
 
 Code shared by both assistants lives in `app/web/assistant-workspace.js`. `app/web/embedded.js` is the ChatGPT frame host and `app/web/claude.js` is the Claude view host. To extend the workspace, change the shared files once. A new backend operation needs no extra wiring: both hosts send it through their transport.
 

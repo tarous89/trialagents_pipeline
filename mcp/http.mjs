@@ -1,6 +1,6 @@
 import {createHmac,randomUUID} from 'node:crypto'
 import {Server,createMcpHandler} from '@modelcontextprotocol/server'
-import {claudeToolList,claudeWidgetUri,describe,instructions,invoke,invokeWorkspaceRequest,toolList,widgetUri,workspaceRequestTool} from './tools.mjs'
+import {claudeToolList,claudeWidgetUri,describe,instructions,invoke,invokeClaude,invokeWorkspaceRequest,toolList,widgetUri,workspaceRequestTool} from './tools.mjs'
 import {relayPanelSelection} from '../app/server/selection.mjs'
 
 export const resource='https://mcp.trialagents.com/pipeline/chatgpt'
@@ -44,7 +44,7 @@ export function pipelineHttp({authorize,run,readWidget,selection,audience=resour
          return selection.ask([user.id,r.workspace,r.input.instance])
        }
        if(claude&&params.name===workspaceRequestTool)return invokeWorkspaceRequest(params.arguments??{},r=>operation(r,'workspace'),r=>relayPanelSelection(selection,user.id,r.workspace,r))
-       return invoke(params.name,params.arguments??{},operation,context).then(reply=>{
+       return (claude?invokeClaude:invoke)(params.name,params.arguments??{},operation,context).then(reply=>{
          const target=reply._meta?.pipeline
          if(selection&&target?.workspace&&target.url){
            const id=randomUUID(),instance=id+'.'+sign(target.workspace,id)

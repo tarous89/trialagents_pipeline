@@ -72,10 +72,58 @@ export const toolList=Array.from(descriptors.values(),t=>t.descriptor)
 export const claudeWidgetUri='ui://trialagents-pipeline/claude-workspace-v1.html'
 export const workspaceRequestTool='pipeline_workspace_request'
 const workspaceRequest=z.strictObject({request:z.strictObject({op:z.string().regex(/^[a-z][a-zA-Z]*(\.[a-zA-Z]+)*$/).max(60),workspace:uuid,input:z.unknown().optional(),revision:num.optional(),requestId:uuid.optional()})})
+// Claude lists read-only tools plus two write tools, so a user approves record edits
+// and app changes (schema, design, custom views) once each. The combined tools run the
+// same handlers as the individual ChatGPT tools.
+const claudeTitles={open_pipeline:'Open Pipeline workspace',read_pipeline:'Read pipeline',read_pipeline_followup:'Read pipeline follow-up',read_active_pipeline_selection:'Read open workspace selection',get_pipeline_schema:'Read Pipeline tables and fields',preview_pipeline_archive:'Preview archive impact',prepare_pipeline_view:'Prepare custom view',read_pipeline_view:'Read custom view',list_pipeline_views:'List custom views'}
+export const editRecordsTool='edit_pipeline_records',changeAppTool='change_pipeline_app'
+const recordActions=['create','update','delete']
+const appActions={add_table:'add_pipeline_table',add_column:'add_pipeline_column',add_relationship:'add_pipeline_relationship',
+ update_table:'update_pipeline_table',update_column:'update_pipeline_column',update_relationship:'update_pipeline_relationship',
+ archive_table:'archive_pipeline_table',archive_column:'archive_pipeline_column',archive_relationship:'archive_pipeline_relationship',
+ restore_table:'restore_pipeline_table',restore_column:'restore_pipeline_column',restore_relationship:'restore_pipeline_relationship',
+ customize:'customize_pipeline',create_view:'create_pipeline_view',update_view:'update_pipeline_view',retry_view:'retry_pipeline_view'}
+const context=s.optional().describe('Copy from the workspace result in this conversation.')
+const editRecords=z.strictObject({...write,workspace_context:context,action:z.enum(recordActions).describe('create adds a named record; update patches only the given fields; delete removes one explicitly selected record.'),table:id,id:id.optional().describe('Required for update and delete.'),values:change.optional().describe('Required for create and update.')})
+const changeApp=z.strictObject({workspace:uuid,workspace_context:context,action:z.enum(Object.keys(appActions)),
+ revision:num.optional().describe('Required except for retry_view.'),request_id:uuid.optional().describe('Required. For retry_view, the original request ID.'),
+ table:id.optional().describe('add_column, add_relationship: the table.'),target:id.optional().describe('add_relationship: the other table.'),
+ label:s.optional().describe('add_table, add_relationship: the name.'),inverse:s.optional(),cardinality:cardinality.optional(),
+ description:s.optional(),columns:z.array(column).max(100).optional(),column:column.optional(),
+ id:id.optional().describe('The table, column, relationship or view to change.'),changes:patch.optional(),keep_unavailable:z.boolean().optional(),
+ title:s.optional().describe('customize: workspace title.'),accent:s.optional(),tabs:z.array(designTab).optional(),
+ view:view.optional().describe('create_view, update_view: call prepare_pipeline_view first.'),version:num.optional().describe('update_view: the expected version.')})
+const claudeTool=(name,title,description,schema,annotations,meta={})=>({name,title,description,inputSchema:z.toJSONSchema(schema,{target:'draft-7',io:'input'}),securitySchemes:oauth,_meta:{securitySchemes:oauth,...meta},annotations})
 export const claudeToolList=[
- ...JSON.parse(JSON.stringify(toolList).split(widgetUri).join(claudeWidgetUri)),
- {name:workspaceRequestTool,description:'Run a request from the open Pipeline workspace view.',inputSchema:z.toJSONSchema(workspaceRequest,{target:'draft-7',io:'input'}),securitySchemes:oauth,_meta:{securitySchemes:oauth,ui:{visibility:['app']}},annotations:{readOnlyHint:false,destructiveHint:true,idempotentHint:false,openWorldHint:true}}
+ ...JSON.parse(JSON.stringify(toolList).split(widgetUri).join(claudeWidgetUri)).filter(t=>claudeTitles[t.name]).map(t=>({...t,title:claudeTitles[t.name]})),
+ claudeTool(editRecordsTool,'Edit pipeline records','Create, update or delete one business record. Built-in assignment and deadline changes may notify workspace members by email.',editRecords,{readOnlyHint:false,destructiveHint:true,idempotentHint:true,openWorldHint:true}),
+ claudeTool(changeAppTool,'Change Pipeline app','Change the workspace app: add, update, archive or restore custom tables, columns and relationships (owner only); apply workspace title, accent and navigation (owner only); save, revise or retry a shared custom view and present it. Review archive impact first.',changeApp,{readOnlyHint:false,destructiveHint:true,idempotentHint:true,openWorldHint:false},{ui:{resourceUri:claudeWidgetUri}}),
+ claudeTool(workspaceRequestTool,'Workspace panel request','Run a request from the open Pipeline workspace view.',workspaceRequest,{readOnlyHint:false,destructiveHint:true,idempotentHint:false,openWorldHint:true},{ui:{visibility:['app']}})
 ]
+const claudeNames=new Set(claudeToolList.map(t=>t.name))
+// Run a Claude tool call: the combined tools pick each handler's own arguments,
+// which that handler's schema then validates.
+export async function invokeClaude(name,args,run,context){
+ if(!claudeNames.has(name)||name===workspaceRequestTool)return {isError:true,content:[{type:'text',text:'Unknown Pipeline tool'}]}
+ let target=name,picked=args
+ if(name===editRecordsTool||name===changeAppTool){
+   const parsed=(name===editRecordsTool?editRecords:changeApp).safeParse(args)
+   if(!parsed.success)return {isError:true,content:[{type:'text',text:'Invalid Pipeline tool arguments. Check the field names and required values.'}]}
+   const {action,...rest}=parsed.data
+   target=name===editRecordsTool?action+'_pipeline_record':appActions[action]
+   const keys=Object.keys(descriptors.get(target).schema.shape)
+   picked=Object.fromEntries(Object.entries(rest).filter(([k,v])=>keys.includes(k)&&v!==undefined))
+ }
+ const response=await invoke(target,picked,run,context)
+ // App changes present the workspace. Schema and design results open its settings.
+ const result=response.structuredContent?.result
+ if(name===changeAppTool&&!response.isError&&result&&!response._meta?.pipeline){
+   const workspace=result.workspace??picked.workspace,url=link(workspace,{tab:'Settings'})
+   Object.assign(result,{workspace,url});if(context)result.workspace_context=context
+   response._meta={pipeline:{workspace,url}};describe(response)
+ }
+ return response
+}
 // Same scope as the first-party frame endpoint: one workspace per request, no frame grants or streams.
 export async function invokeWorkspaceRequest(args,run,selection){
  const parsed=workspaceRequest.safeParse(args)

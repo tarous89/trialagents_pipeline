@@ -122,12 +122,43 @@ test('Claude uses its own audience and route, the same tools, and is recorded as
  const rpc=async(method,params)=>{const raw=await (await post(claudeResource,method,params)).text()
    const json=JSON.parse(raw.startsWith('{')?raw:raw.split('\n').find(l=>l.startsWith('data: ')).slice(6));assert.ifError(json.error);return json.result}
  const {tools}=await rpc('tools/list',{})
- assert.ok(['open_pipeline','read_pipeline','read_pipeline_followup','read_active_pipeline_selection','create_pipeline_view','update_pipeline_view'].every(n=>tools.some(tool=>tool.name===n)))
+ // Claude lists read-only tools, one record-edit tool and one app-change tool.
+ const model=tools.filter(t=>!t._meta?.ui?.visibility||t._meta.ui.visibility.includes('model'))
+ assert.ok(tools.every(t=>t.title&&t.annotations))
+ assert.deepEqual(model.filter(t=>!t.annotations.readOnlyHint).map(t=>t.name).sort(),['change_pipeline_app','edit_pipeline_records'])
+ assert.ok(model.filter(t=>t.annotations.readOnlyHint).every(t=>!t.annotations.destructiveHint&&!t.annotations.openWorldHint))
+ assert.ok(model.filter(t=>!t.annotations.readOnlyHint).every(t=>t.annotations.destructiveHint))
+ assert.equal(tools.find(t=>t.name==='edit_pipeline_records').annotations.openWorldHint,true)
+ assert.deepEqual(tools.filter(t=>!model.includes(t)).map(t=>t.name),['pipeline_workspace_request'])
+ assert.ok(['open_pipeline','read_pipeline','read_pipeline_followup','read_active_pipeline_selection','prepare_pipeline_view'].every(n=>model.some(tool=>tool.name===n)))
+ assert.equal((await rpc('tools/call',{name:'create_pipeline_record',arguments:{workspace,revision:0,request_id:randomUUID(),table:'Program',values:{name:'Hidden tool'}}})).isError,true)
  const read=await rpc('tools/call',{name:'read_pipeline',arguments:{workspace}})
  assert.ok(!read.isError,JSON.stringify(read.content))
  // claude.ai shows the model the text block, so it must carry the records and continuation context.
  const shown=JSON.parse(read.content[0].text)
  assert.deepEqual(shown,read.structuredContent)
  assert.ok(shown.result.workspace_context&&Array.isArray(shown.result.records))
+ const workspace_context=shown.result.workspace_context
+ const call=async(name,args)=>{const r=await rpc('tools/call',{name,arguments:{workspace,workspace_context,...args}});assert.ok(!r.isError,name+' '+JSON.stringify(r.content));return r}
+ const revision=async()=>(await store(user,{op:'bootstrap',workspace})).revision
+ // Record edits run through one tool.
+ const created=(await call('edit_pipeline_records',{action:'create',table:'Program',values:{name:'Combined tool program'},revision:await revision(),request_id:randomUUID()})).structuredContent.result
+ await call('edit_pipeline_records',{action:'update',table:'Program',id:created.id,values:{name:'Renamed program'},revision:await revision(),request_id:randomUUID()})
+ assert.ok((await store(user,{op:'bootstrap',workspace})).items.some(r=>r.name==='Renamed program'))
+ await call('edit_pipeline_records',{action:'delete',table:'Program',id:created.id,revision:await revision(),request_id:randomUUID()})
+ assert.ok(!(await store(user,{op:'bootstrap',workspace})).items.some(r=>r.id===created.id))
+ assert.equal((await rpc('tools/call',{name:'edit_pipeline_records',arguments:{workspace,workspace_context,action:'archive',table:'Program',revision:0,request_id:randomUUID()}})).isError,true)
+ // Schema, design and custom views run through the other, and present the workspace.
+ const table=await call('change_pipeline_app',{action:'add_table',label:'Committees',revision:await revision(),request_id:randomUUID()})
+ assert.match(table._meta.pipeline.url,/tab=Settings/)
+ assert.equal(table.structuredContent.result.workspace_context,workspace_context)
+ await call('change_pipeline_app',{action:'add_column',table:table.structuredContent.result.id,column:{label:'Chair',type:'text'},revision:await revision(),request_id:randomUUID()})
+ const request_id=randomUUID()
+ const saved=await call('change_pipeline_app',{action:'create_view',view:{title:'Committee list',query:{table:'Program'}},revision:await revision(),request_id})
+ const viewId=saved._meta.pipeline.view.id
+ assert.match(saved._meta.pipeline.url,new RegExp('view='+viewId))
+ assert.equal((await call('change_pipeline_app',{action:'retry_view',request_id}))._meta.pipeline.receipt.id,viewId)
+ await call('change_pipeline_app',{action:'update_view',id:viewId,version:saved._meta.pipeline.view.version,view:{title:'Committee overview',query:{table:'Program'}},revision:await revision(),request_id:randomUUID()})
+ assert.equal((await call('read_pipeline_view',{id:viewId})).structuredContent.result.title,'Committee overview')
  assert.ok(sources.length&&sources.every(s=>s==='Claude'))
 })
