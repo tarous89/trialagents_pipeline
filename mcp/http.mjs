@@ -1,6 +1,6 @@
 import {createHmac,randomUUID} from 'node:crypto'
 import {Server,createMcpHandler} from '@modelcontextprotocol/server'
-import {instructions,invoke,toolList,widgetUri} from './tools.mjs'
+import {describe,instructions,invoke,toolList,widgetUri} from './tools.mjs'
 
 export const resource='https://mcp.trialagents.com/pipeline/chatgpt'
 export const claudeResource='https://mcp.trialagents.com/pipeline/claude'
@@ -41,7 +41,7 @@ export function pipelineHttp({authorize,run,readWidget,selection,audience=resour
          const target=reply._meta?.pipeline
          if(selection&&target?.workspace&&target.url){
            const id=randomUUID(),instance=id+'.'+sign(target.workspace,id)
-           target.panel_instance=instance;reply.structuredContent.result.panel_instance=instance
+           target.panel_instance=instance;reply.structuredContent.result.panel_instance=instance;describe(reply)
          }
          return reply
        })

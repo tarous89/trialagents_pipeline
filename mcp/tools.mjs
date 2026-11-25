@@ -67,11 +67,17 @@ tool('connect_pipeline_frame','Authorize the first-party Pipeline workspace fram
 
 export const toolList=Array.from(descriptors.values(),t=>t.descriptor)
 const brief=data=>Object.fromEntries(Object.entries(data).filter(([k])=>!['tabs','accent','canInvite','presentation','state'].includes(k)))
+// Hosts that render the widget (claude.ai) may give the model only the text block,
+// so it repeats the structured result: records, workspace_context and panel_instance.
+export function describe(response){
+ response.content=[{type:'text',text:JSON.stringify(response.structuredContent)}]
+ return response
+}
 function reply(data,show=false,context,target=data){
  const publicResult=brief(data)
  if(show&&context&&target.workspace&&target.url)publicResult.workspace_context=context
  if(publicResult.view)publicResult.view=brief(publicResult.view)
- return {content:[{type:'text',text:'Pipeline workspace result.'}],structuredContent:{result:publicResult},...show&&{_meta:{pipeline:target}}}
+ return describe({structuredContent:{result:publicResult},...show&&{_meta:{pipeline:target}}})
 }
 const transient=e=>[429,502,503,504].includes(e?.status)||['ECONNRESET','ETIMEDOUT','EPIPE','CONNECTION_CLOSED','CONNECTION_ENDED'].includes(e?.code)
 export async function invoke(name,args,run,context){
