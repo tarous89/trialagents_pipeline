@@ -13,6 +13,7 @@ Pipeline owns the app, migrations, worker, MCP descriptors and implementation, w
 | `https://mcp.trialagents.com/.well-known/oauth-protected-resource/pipeline/claude` | Shared web service returns the Claude resource metadata |
 | `https://pipeline.trialagents.com/pipeline-renderer` | Inert sandbox for authored HTML, SVG and local controls |
 | `about`, `support`, `privacy`, `terms` under `https://pipeline.trialagents.com/pipeline-info/` | Public listing, support and legal pages |
+| https://pipeline.trialagents.com/pipeline-info/connectors | Public setup, permissions and troubleshooting guide for both assistants. Use as the Claude connector documentation URL. |
 
 **Routing the MCP hostname.** Preserve the existing host for other MCP products. Before activation, route the four exact Pipeline paths on the MCP hostname to the existing web service. Preserve the request method, body, bearer header, response content type, streaming and status. The OAuth audience is the external HTTPS URL even if the request reaches the service through a different internal hostname. DNS alone cannot route individual paths. If the current ingress cannot forward these paths, the direct web-service alternative is `https://pipeline.trialagents.com/pipeline/chatgpt`. Changing the public URL requires updating the manifest and OAuth audience together and reconnecting the client.
 
@@ -56,7 +57,7 @@ Member notifications use workspace membership and recipient preferences. An emai
 
 ## Claude plugin
 
-The Claude plugin in `plugins/claude` is version 0.3.0 and uses the `assets/claude-mark.png` icon. The two plugins share the same workspace roles, publisher and support URLs. Claude’s skill and MCP tools are described under **Claude tools and approvals**.
+The Claude plugin in `plugins/claude` is version 0.3.1 and uses the `assets/claude-mark.png` icon. The two plugins share the same workspace roles, publisher and support URLs. Claude’s skill and MCP tools are described under **Claude tools and approvals**.
 
 | ChatGPT | Claude |
 | --- | --- |
