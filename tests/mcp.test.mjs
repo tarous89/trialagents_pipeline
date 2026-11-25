@@ -35,6 +35,15 @@ test('standalone shared-web MCP authenticates the exact audience and runs the co
  }
  const init=await rpc('initialize',{protocolVersion:'2025-11-25',clientInfo:{name:'test',version:'1'},capabilities:{}});assert.equal(init.serverInfo.name,'TrialAgents Pipeline')
  const {tools}=await rpc('tools/list',{});assert.ok(tools.length>=25);assert.ok(tools.every(t=>t.securitySchemes?.[0]?.type==='oauth2'&&t._meta.securitySchemes[0].type==='oauth2'&&t.outputSchema));assert.ok(tools.every(t=>!t.name.includes('billing')))
+ await t.test('tools that can send email declare irreversible external writes',()=>{
+   for(const name of ['create_pipeline_record','update_pipeline_record','invite_pipeline_member']){
+     const tool=tools.find(tool=>tool.name===name)
+     assert.equal(tool.annotations.readOnlyHint,false,name)
+     assert.equal(tool.annotations.destructiveHint,true,name)
+     assert.equal(tool.annotations.openWorldHint,true,name)
+     assert.match(tool.description,/email/i,name)
+   }
+ })
  await t.test('modern clients discover, enumerate tools and read a program',async()=>{
    const version='2026-07-28'
    const _meta={[PROTOCOL_VERSION_META_KEY]:version,[CLIENT_INFO_META_KEY]:{name:'test',version:'1'},[CLIENT_CAPABILITIES_META_KEY]:{}}

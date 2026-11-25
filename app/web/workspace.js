@@ -157,7 +157,7 @@ function assistantActions(verb) {
 }
 function assistantSettings() {
   return '<div class="assistant-settings-cards">'+Object.keys(assistantUrls).map(name=>panel(name,
-    '<div class="pad"><p>Connect to use Pipeline inside '+name+'. With your permission, '+name+' can analyze workspace data and add or edit records within your access level.</p>'+assistantAction(name,'Connect to')+'</div>')).join('')+'</div>';
+    '<div class="pad"><p>Use '+name+' with your Pipeline role. Readers can explore the workspace. Editors and owners can edit records and shared custom views. Only owners can customize the workspace structure.</p>'+assistantAction(name,'Connect to')+'</div>')).join('')+'</div>';
 }
 const exampleTabs={
  Overview:['Program','program','Program'],Milestones:['Plan','plan','Program'],Timeline:['Plan','plan','Program'],

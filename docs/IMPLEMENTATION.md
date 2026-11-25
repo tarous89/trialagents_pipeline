@@ -30,13 +30,14 @@ Verify that one downstream risk reached along multiple dependency paths appears 
 | Read the whole workspace, custom views and Logs | Yes | Yes | Yes |
 | Search, filter, use read tools, update own preferences | Yes | Yes | Yes |
 | Create, edit, duplicate or delete planning records | Yes | Yes | — |
-| Create shared custom views | Yes | Yes | — |
+| Create and edit shared custom views | Yes | Yes | — |
+| Manage custom tables, columns and relationships | Yes | — | — |
 | Change app styling, add/edit/reorder top-level tabs, promote a view to navigation | Yes | — | — |
 | Invite, remove, change member roles, manage billing | Yes | — | — |
 
 Membership is workspace-wide. Use a unique workspace/user membership and an explicit owner. Permissions follow the signed-in person across hosts. Opening a link always resolves membership. Require the current actor for browser and MCP writes. A revoked session or suspended team membership loses access on the next authorized request.
 
-**Owner customization.** Through ChatGPT or Claude, describe a tab or style change, preview the proposed configuration and save an exact revision. Reuse Intel presentation primitives for Intel-derived elements. Provide supported layout and style controls for Pipeline-owned content. Keep stable tab IDs, version configurations, check the expected revision on save, and log the change. A saved view is a workspace data object. Creating it never alters navigation. Proposed lifecycle for shared views: editor manages their own views, owner manages all. Read-only users can apply temporary filters.
+**Owner customization.** Through ChatGPT or Claude, describe a tab or style change, preview the proposed configuration and save an exact revision. Reuse Intel presentation primitives for Intel-derived elements. Provide supported layout and style controls for Pipeline-owned content. Keep stable tab IDs, version configurations, check the expected revision on save, and log the change. A saved view is a workspace data object. Creating it never alters navigation. Owners and editors can revise shared views at the expected version. An editor can remove a view they authored. Only a workspace owner can remove a pinned view and its navigation tab together. Read-only users can apply temporary filters.
 
 ## Settings and ownership
 

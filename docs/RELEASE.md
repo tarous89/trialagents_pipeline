@@ -42,9 +42,21 @@ Open a fictional EX-101 workspace in a fresh chat. The first scoped question ope
 
 Authored views load the Pipeline-owned renderer on demand. The parent sanitizes content and passes it into an opaque-origin sandbox. Its fixed script supports local interactive controls and explicit version-checked saves. Content never needs to be included in a renderer URL. Listings, a real ChatGPT session, staging latency and review access should be checked on the chosen deployment before submission.
 
+## ChatGPT permissions and tool review
+
+The connection requests the existing `mcp:tools` OAuth scope. Pipeline checks the member’s role for each operation. The listing groups writes under **Edit records and custom views** (owners and editors) and **Customize workspace structure** (owners only). Readers can open the workspace and read shared data. ChatGPT uses account and workspace policy when deciding whether to ask for approval. Each model-callable operation has its own tool descriptor.
+
+| MCP tool | Read only | Destructive | Open world | Side effect |
+| --- | --- | --- | --- | --- |
+| `create_pipeline_record` | No | Yes | Yes | Can queue an email to a workspace member for a built-in record. |
+| `update_pipeline_record` | No | Yes | Yes | Can overwrite record fields and queue member email. |
+| `invite_pipeline_member` | No | Yes | Yes | The workspace invitation form lets an eligible owner send an email to the specified recipient. |
+
+Member notifications use workspace membership and recipient preferences. An email that has been sent cannot be recalled. When preparing a submission draft, scan the deployed ChatGPT MCP endpoint and check these annotations before submitting it for review.
+
 ## Claude plugin
 
-The Claude plugin in `plugins/claude` mirrors ChatGPT 0.2.5. It uses the same name, version, author, legal and support URLs, keywords and skill rules, and the `assets/claude-mark.png` icon. Only host details differ:
+The Claude plugin in `plugins/claude` has its own package version and uses the same workspace roles and MCP write annotations. It uses the `assets/claude-mark.png` icon. The hosts use the following package formats.
 
 | ChatGPT | Claude |
 | --- | --- |
