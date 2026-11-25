@@ -1,7 +1,7 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "trialagents-pipeline",
-  "version": "0.2.5",
+  "version": "0.2.7",
   "description": "Manage your biotech pipeline from ChatGPT. Track programs, milestones, activities, deliverables and changes in a shared workspace.",
   "author": {
     "name": "Atlas Consulting",
@@ -21,7 +21,7 @@
       "interface": {
         "displayName": "TrialAgents Pipeline",
         "shortDescription": "Manage your biotech pipeline",
-        "longDescription": "Manage your biotech pipeline from ChatGPT. Add programs, milestones, activities, deliverables and changes, track dependencies, and open the same workspace in the TrialAgents app. Connect your account to save your work. Owners can manage tables and relationships, and editors can update records and save shared views.",
+        "longDescription": "Manage your biotech pipeline from ChatGPT. Add programs, milestones, activities, deliverables and changes, track dependencies, and open the same workspace in the TrialAgents app. Readers can explore records and shared views. Editors and owners can edit records and custom views. Only owners can customize workspace structure, including tables, fields, relationships and navigation. Record changes can email workspace members according to their notification preferences. Eligible owners can send invitations by email.",
         "developerName": "Atlas Consulting",
         "category": "Scientific Research",
         "capabilities": [
@@ -103,7 +103,7 @@
       },
       "publication": {
         "countries": [],
-        "release_notes": "Manage biotech development programs in ChatGPT. Create milestones, activities, deliverables and change records, link them to your plan, and reopen the same saved workspace in the TrialAgents app."
+        "release_notes": "Clarified who can edit records and custom views, who can customize workspace structure, and when record changes or team invitations can send email."
       }
     }
   }

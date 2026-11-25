@@ -27,7 +27,7 @@ export function pipelineHttp({authorize,run,readWidget,selection,audience=resour
    try{if(token)user=await authorize(token,audience)}catch{return Response.json({error:'Authorization temporarily unavailable'},{status:503})}
    if(!user)return Response.json({error:'Connect Pipeline'},{status:401,headers:{'WWW-Authenticate':'Bearer resource_metadata="'+new URL(discoveryPath(audience),audience).href+'", scope="mcp:tools"','Cache-Control':'no-store'}})
    const handler=createMcpHandler(()=>{
-     const server=new Server({name:'TrialAgents Pipeline',version:'0.2.5'},{capabilities:{tools:{},resources:{}},instructions})
+     const server=new Server({name:'TrialAgents Pipeline',version:'0.2.7'},{capabilities:{tools:{},resources:{}},instructions})
      const claude=assistant==='Claude'
      const view=claude?{uri:claudeWidgetUri,meta:claudeResourceMeta,accepted:[claudeWidgetUri,widgetUri,...legacyWidgets]}:{uri:widgetUri,meta:chatgptResourceMeta,accepted:[widgetUri,...legacyWidgets]}
      server.setRequestHandler('tools/list',()=>({tools:claude?claudeToolList:toolList}))

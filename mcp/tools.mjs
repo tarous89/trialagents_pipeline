@@ -28,7 +28,7 @@ function tool(name,description,shape,op,{effect='read',external=false,meta={},pr
  if(name.startsWith('read_pipeline')&&op===readOperation)Object.assign(properties,{records:{type:'array'},groups:{type:'array'},next:{type:['integer','null']}})
  if(name==='get_pipeline_schema')Object.assign(properties,{tables:{type:'array'},fields:{type:'array'},canManage:{type:'boolean'}})
  if(effect!=='read')Object.assign(properties,{id:{type:'string'},version:{type:'integer'},archived:{type:'boolean'}})
- const descriptor={name,description,inputSchema:z.toJSONSchema(schema,{target:'draft-7',io:'input'}),outputSchema:{type:'object',properties:{result:{type:'object',properties}},required:['result']},securitySchemes:oauth,_meta:{securitySchemes:oauth,...meta},annotations:{readOnlyHint:effect==='read',destructiveHint:effect==='replace',idempotentHint:true,openWorldHint:external}}
+ const descriptor={name,description,inputSchema:z.toJSONSchema(schema,{target:'draft-7',io:'input'}),outputSchema:{type:'object',properties:{result:{type:'object',properties}},required:['result']},securitySchemes:oauth,_meta:{securitySchemes:oauth,...meta},annotations:{readOnlyHint:effect==='read',destructiveHint:effect==='replace'||effect==='send',idempotentHint:true,openWorldHint:external}}
  descriptors.set(name,{descriptor,schema,op,project,show,save,surface,needsContext})
 }
 const readShape={...optional,query:query.optional(),selection:z.enum(['records','workspaces','design']).default('records')}
@@ -39,9 +39,9 @@ tool('read_pipeline_followup','Read data without reopening an already presented 
 tool('read_active_pipeline_selection','When the user’s request depends on the open screen, request its current saved tab, view, record and filters. Use the panel_instance from the presented workspace in this chat.',{...workspace,instance:s.regex(/^[a-f0-9-]{36}\.[A-Za-z0-9_-]{22}$/)},'selection.read')
 tool('get_pipeline_schema','List operational tables or inspect one table and its field types, protection and relationships.',{...optional,table:id.optional(),archived:z.boolean().optional(),known_revision:num.optional()},'assistant.schema',{project:a=>({table:a.table,archived:a.archived,knownRevision:a.known_revision})})
 tool('preview_pipeline_archive','Inspect dependent views, pins and relationships before archiving a custom definition.',{...workspace,id},'assistant.impact')
-for(const [action,effect] of [['create','add'],['update','replace'],['delete','replace']]){
+for(const [action,effect] of [['create','send'],['update','replace'],['delete','replace']]){
  const fields={table:id,...action!=='create'&&{id},...action!=='delete'&&{values:change}}
- tool(action+'_pipeline_record',({create:'Add a named business record.',update:'Patch only the selected record fields.',delete:'Delete one explicitly selected business record.'})[action]+(action==='delete'?' Schema definitions cannot be deleted.':' Built-in assignment and deadline changes may notify workspace members.'),{...write,...fields},'assistant.row.'+action,{effect,external:action!=='delete'})
+ tool(action+'_pipeline_record',({create:'Add a named business record.',update:'Patch only the selected record fields.',delete:'Delete one explicitly selected business record.'})[action]+(action==='delete'?' Schema definitions cannot be deleted.':' Creating or updating built-in records can email workspace members about assignments, deadlines or linked events according to their notification preferences.'),{...write,...fields},'assistant.row.'+action,{effect,external:action!=='delete'})
 }
 tool('add_pipeline_table','Owner only. Add one custom table with its initial fields. Name is built in.',{...write,label:s,description:s.optional(),columns:z.array(column).max(100).optional()},'schema.table.add',{effect:'add',meta:author})
 tool('add_pipeline_column','Owner only. Add a typed column to an active logical table.',{...write,table:id,column},'schema.column.add',{effect:'add',meta:author,project:a=>({table:a.table,...a.column})})
@@ -59,7 +59,7 @@ tool('update_pipeline_view','Revise the current view in place at its expected ve
 tool('retry_pipeline_view','Resume the retained save under its original UUID without replacing its content.',{...workspace,request_id:uuid},'assistant.view.retry',{effect:'replace',meta:visible,show:true,save:true})
 tool('customize_pipeline','Owner only. Apply agreed workspace title, accent, navigation and pins.',{...write,title:s,accent:s,tabs:z.array(designTab)},'design.save',{effect:'replace',meta:author})
 tool('save_pipeline_controls','Save the user’s explicit control changes to the current view version.',{...write,id:uuid,version:num,state:z.record(s,z.union([s,z.boolean(),z.number()]))},'assistant.state',{effect:'replace',meta:privateUI})
-tool('invite_pipeline_member','Send one invitation email after the authorized owner submits the invitation form.',{...write,email:z.email(),role:z.enum(['reader','editor'])},'team.invite',{effect:'add',external:true,meta:privateUI})
+tool('invite_pipeline_member','Send an invitation email to the address submitted by an eligible workspace owner. The email cannot be recalled.',{...write,email:z.email(),role:z.enum(['reader','editor'])},'team.invite',{effect:'send',external:true,meta:privateUI})
 
 // The first-party frame keeps its random session secret. ChatGPT only sees a
 // SHA-256 challenge and acknowledgement, never a browser or OAuth credential.
