@@ -1,5 +1,6 @@
 import {notFound} from 'next/navigation';
 import {PLUGIN_PUBLISHER_NAME as publisher,PLUGIN_PUBLISHER_ADDRESS as address,PLUGIN_SUPPORT_EMAIL as email} from '@/app/lib/plugin-publisher';
+import styles from './information.module.css';
 
 const pages = {
  about: ['TrialAgents Pipeline', 'Plan biotech programs, milestones and decisions in ChatGPT, Claude or the TrialAgents app. Connect your TrialAgents account to save changes and revisit the same workspace.', 'Readers can explore records and shared views. Editors and owners can create and edit records and shared custom views. Only owners can customize workspace structure, including tables, fields, relationships and navigation.', 'Record changes can email workspace members according to their notification preferences. An eligible owner can also send an invitation to a specified email address. ChatGPT may ask for confirmation according to your account and workspace settings.'],
@@ -13,15 +14,31 @@ const pages = {
  'Review generated records, views and analyses before relying on them for clinical, financial or regulatory decisions. Individual workspace features are free. Team invitations require the applicable team entitlement. Any separate website agreement governs purchases made there.',
  'We aim to provide reliable access. Service availability and generated results vary. Your mandatory legal rights and any separate written agreement continue to apply.']
 } as const;
-type PageKey=keyof typeof pages;
-export default async function PipelineInformation({params}:{params:Promise<{section:string}>}){
- const {section}=await params;
- if(!Object.hasOwn(pages,section))notFound();
- const [title,...paragraphs]=pages[section as PageKey];
- return <main style={{maxWidth:820,margin:'48px auto',padding:'0 24px',lineHeight:1.6,color:'#172638'}}>
-   <header>TrialAgents Pipeline · {publisher}</header><h1>{title}</h1>
-   {paragraphs.map(text=><p key={text}>{text}</p>)}
-   <p><a href={'mailto:'+email}>{email}</a></p>
-   <nav aria-label="Pipeline information" style={{display:'flex',gap:16,flexWrap:'wrap'}}>{Object.entries(pages).filter(([id])=>id!==section).map(([id,[label]])=><a key={id} href={'/pipeline-info/'+id}>{label}</a>)}<a href="/">Open TrialAgents app</a></nav>
- </main>;
+type PageKey = keyof typeof pages;
+
+export default async function PipelineInformation({ params }: { params: Promise<{ section: string }> }) {
+  const { section } = await params;
+  if (!Object.hasOwn(pages, section)) notFound();
+  const [title, ...paragraphs] = pages[section as PageKey];
+
+  return (
+    <main className={styles.page}>
+      <article className={styles.article} aria-labelledby="information-title">
+        <header>
+          <p className={styles.publisher}>TrialAgents Pipeline · {publisher}</p>
+          <h1 id="information-title">{title}</h1>
+        </header>
+        <div className={styles.copy}>
+          {paragraphs.map(text => <p key={text}>{text}</p>)}
+          <p><a href={'mailto:' + email}>{email}</a></p>
+        </div>
+        <nav className={styles.links} aria-label="Pipeline information">
+          {Object.entries(pages).filter(([id]) => id !== section).map(([id, [label]]) => (
+            <a key={id} href={'/pipeline-info/' + id}>{label}</a>
+          ))}
+          <a href="/">Open TrialAgents app</a>
+        </nav>
+      </article>
+    </main>
+  );
 }
