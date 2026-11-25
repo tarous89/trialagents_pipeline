@@ -54,7 +54,17 @@ The Claude plugin in `plugins/claude` mirrors ChatGPT 0.2.5. It uses the same na
 
 Build it with `python scripts/package-plugins.py --host claude --output dist`. The repository root also has `.claude-plugin/marketplace.json`, so Claude Code can install it with `/plugin install trialagents-pipeline --marketplace tarous89/trialagents_pipeline`. Check it with `claude plugin validate plugins/claude`.
 
-The build also produces a Claude copy of the widget (`pipeline-claude.html`) and of the embedded workspace (`pipeline-embedded-claude.html` and `.js`). They use Claude wording, such as **Ask Claude to create a custom view**, and the ChatGPT build outputs stay byte for byte the same. The Claude MCP route serves that widget. It also replaces the shared `ui.domain` with Claude's sandbox host for this server, `902202f9dd8f7b5c489c362d072e95f2.claudemcpcontent.com`, which is the first 32 hex characters of the SHA-256 of `https://mcp.trialagents.com/pipeline/claude`. `/pipeline-embedded-claude` allows framing only by itself, that sandbox host and `https://claude.ai`. If the Claude MCP URL changes, recompute the host in that route.
+The build also produces the Claude view, `pipeline-claude.html`. Claude does not let this connector frame `pipeline.trialagents.com`, so the view bundles the same workspace code instead of framing `/pipeline-embedded`. It is the same shell, planner, styles and record drawers as the web app, with Claude wording such as **Ask Claude to create a custom view**. The ChatGPT build outputs stay unchanged.
+
+How the Claude view works:
+
+- **Data.** Every read and save goes through `pipeline_workspace_request`, an app-only tool (`_meta.ui.visibility: ["app"]`) that only the Claude route lists. It has the same scope as `/api/pipeline/frame`: one workspace per request, the user's OAuth token, the `Claude workspace` surface, and no `frame.connect` or event stream. Writes are recorded as Claude in audit history.
+- **Live changes.** The view uses revision polling instead of the event stream.
+- **Authored views.** They render in a `blob:` copy of the renderer page that ships inside the bundle.
+- **Account pages.** Personal, Support and Billing open on the website.
+- **Resource.** The view is served as `ui://trialagents-pipeline/claude-workspace-v1.html` and declares no frame, connect or resource domains. The route still replaces `ui.domain` with Claude's sandbox host for this server, `902202f9dd8f7b5c489c362d072e95f2.claudemcpcontent.com`.
+
+Code shared by both assistants lives in `app/web/assistant-workspace.js`. `app/web/embedded.js` is the ChatGPT frame host and `app/web/claude.js` is the Claude view host. To extend the workspace, change the shared files once. A new backend operation needs no extra wiring: both hosts send it through their transport.
 
 The Claude route runs the same handler, tools and store as ChatGPT. It has its own OAuth audience, metadata and gateway path. Claude writes follow the same assistant rules as ChatGPT and are recorded as Claude in audit history. The workspace panel accepts either assistant's token. Consent provisions the personal workspace for both audiences. In the shared web baseline, `pipelineResource(true)` now returns `/pipeline/claude`. Connect Claude to the dedicated review workspace and repeat the candidate checks before submission.
 

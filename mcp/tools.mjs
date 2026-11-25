@@ -66,6 +66,34 @@ tool('invite_pipeline_member','Send one invitation email after the authorized ow
 tool('connect_pipeline_frame','Authorize the first-party Pipeline workspace frame for the connected member.',{...workspace,challenge:z.string().regex(/^[a-f0-9]{64}$/)},'frame.connect',{meta:privateUI,surface:true,effect:'add'})
 
 export const toolList=Array.from(descriptors.values(),t=>t.descriptor)
+
+// Claude renders the workspace inside its own view, which reads and saves through this
+// app-only tool. Hosts keep it out of the model's tool list.
+export const claudeWidgetUri='ui://trialagents-pipeline/claude-workspace-v1.html'
+export const workspaceRequestTool='pipeline_workspace_request'
+const workspaceRequest=z.strictObject({request:z.strictObject({op:z.string().regex(/^[a-z][a-zA-Z]*(\.[a-zA-Z]+)*$/).max(60),workspace:uuid,input:z.unknown().optional(),revision:num.optional(),requestId:uuid.optional()})})
+export const claudeToolList=[
+ ...JSON.parse(JSON.stringify(toolList).split(widgetUri).join(claudeWidgetUri)),
+ {name:workspaceRequestTool,description:'Run a request from the open Pipeline workspace view.',inputSchema:z.toJSONSchema(workspaceRequest,{target:'draft-7',io:'input'}),securitySchemes:oauth,_meta:{securitySchemes:oauth,ui:{visibility:['app']}},annotations:{readOnlyHint:false,destructiveHint:true,idempotentHint:false,openWorldHint:true}}
+]
+// Same scope as the first-party frame endpoint: one workspace per request, no frame grants or streams.
+export async function invokeWorkspaceRequest(args,run,selection){
+ const parsed=workspaceRequest.safeParse(args)
+ if(!parsed.success)return {isError:true,content:[{type:'text',text:'Invalid workspace request.'}],structuredContent:{status:400}}
+ const {request}=parsed.data
+ try{
+   if(['frame.connect','workspace.events'].includes(request.op))throw Object.assign(Error('This request is unavailable in Claude.'),{status:403})
+   let result
+   if(request.op==='selection.wait'||request.op==='selection.answer'){
+     await run({op:'workspace.access',workspace:request.workspace})
+     result=await selection(request)
+   }else result=await run(request)
+   return {content:[{type:'text',text:'Pipeline workspace data.'}],structuredContent:{result:result??{}}}
+ }catch(e){
+   const status=e.status??500
+   return {isError:true,content:[{type:'text',text:e.status&&e.status<500?e.message:'Pipeline request failed'}],structuredContent:{status}}
+ }
+}
 const brief=data=>Object.fromEntries(Object.entries(data).filter(([k])=>!['tabs','accent','canInvite','presentation','state'].includes(k)))
 // Hosts that render the widget (claude.ai) may give the model only the text block,
 // so it repeats the structured result: records, workspace_context and panel_instance.

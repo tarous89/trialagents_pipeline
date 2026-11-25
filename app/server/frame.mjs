@@ -1,5 +1,6 @@
 import {workspaceEvents} from './events.mjs'
 import {createHash} from 'node:crypto'
+import {relayPanelSelection} from './selection.mjs'
 const reply=(body,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'private, no-store','Referrer-Policy':'no-referrer'}})
 const origin='https://pipeline.trialagents.com'
 // audience: one OAuth resource, or a map from each resource to its assistant name.
@@ -42,18 +43,7 @@ export async function serveFrame(request,{db,run,audience,selection,listenWorksp
        return run(current,{workspace:req.workspace,op:'workspace.access'},surface)
      })
    }
-   if(req.op==='selection.wait'||req.op==='selection.answer'){
-     const {instance,id,context}=req.input??{}
-     if(!selection||!/^([a-f0-9-]{36})\.[A-Za-z0-9_-]{22}$/.test(instance))return reply({error:'Invalid panel instance'},400)
-     const scope=[grant.id,grant.workspace_id,instance]
-     if(req.op==='selection.wait')return reply(await selection.wait(scope,request.signal)??{})
-     if(typeof id!=='string'||!/^[a-f0-9-]{36}$/.test(id)||context&&(
-       context.workspace!==grant.workspace_id||Buffer.byteLength(JSON.stringify(context))>6000||
-       Object.keys(context).some(k=>!['workspace','tab','filters','view','record','section','lastAction'].includes(k))
-     ))return reply({error:'Invalid selection response'},400)
-     await selection.answer(scope,id,context??null)
-     return reply({})
-   }
+   if(req.op==='selection.wait'||req.op==='selection.answer')return reply(await relayPanelSelection(selection,grant.id,grant.workspace_id,req,request.signal))
    return reply(await run(grant,req,surface))
  }catch(e){return reply({error:e.status?e.message:'Pipeline request failed'},e.status??500)}
 }

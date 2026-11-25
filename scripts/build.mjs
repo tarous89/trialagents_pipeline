@@ -17,7 +17,8 @@ async function bundle(source){
 const main=await bundle(common+'\n'+await read('app/web/browser.js'))
 await writeFile('dist/pipeline.js',main);await writeFile('dist/pipeline.html',shell)
 if(process.argv.includes('--widget')){
- const embedded=await bundle(common+'\n'+await read('app/web/embedded.js'))
+ const shared=await read('app/web/assistant-workspace.js')
+ const embedded=await bundle(common+'\n'+shared+'\n'+await read('app/web/embedded.js'))
  await writeFile('dist/pipeline-embedded.js',embedded)
  await writeFile('dist/pipeline-embedded.html',shell.replace('/pipeline-assets/pipeline.js','/pipeline-assets/pipeline-embedded.js'))
  const chat=(await build({entryPoints:['app/web/chatgpt.js'],bundle:true,minify:true,write:false,format:'iife',target:'es2022'})).outputFiles[0].text
@@ -28,14 +29,16 @@ if(process.argv.includes('--widget')){
    .replace(/<img class="pipeline-mark"[^>]*><h1 class="workspaceTitle">([^<]*<span class="brand-dot"[^>]*>•<\/span> Pipeline)<\/h1>/, '<h1 class="workspaceTitle"><button type="button" class="workspace-brand" aria-label="Open TrialAgents Pipeline"><img src="https://intel.trialagents.com/trialagents-mark-white.png" width="28" height="28" alt=""><span>$1</span></button></h1>')
    .replace('.intel-app{min-height:0}',(await read('app/web/extension-header.css'))+'\n.intel-app{min-height:0}')
  await writeFile('dist/pipeline-widget.html',widgetShell.replace('<script src="/pipeline-assets/pipeline.js"></script>',()=>'<script>'+widget.replace(/<\/script/gi,'<\\/script')+'</script>'))
- // Claude copies of the widget and embedded workspace. The ChatGPT outputs above are unchanged.
+ // Claude bundles the same workspace into its MCP App view instead of framing the app
+ // origin, which Claude does not allow for this connector. The ChatGPT outputs above are unchanged.
  const swap=(text,pairs)=>pairs.reduce((out,[from,to])=>{if(out.split(from).length!==2)throw Error('Expected one occurrence of '+from);return out.replace(from,()=>to)},text)
  const claudeCommon=swap(common,[['Ask ChatGPT to create a custom view','Ask Claude to create a custom view'],['Ask ChatGPT to create your first custom view.','Ask Claude to create your first custom view.']])
- const claudeEmbedded=await bundle(claudeCommon+'\n'+swap(await read('app/web/embedded.js'),[['The ChatGPT connection timed out.','The Claude connection timed out.'],['Copy message to ChatGPT','Copy message to Claude']]))
- await writeFile('dist/pipeline-embedded-claude.js',claudeEmbedded)
- await writeFile('dist/pipeline-embedded-claude.html',shell.replace('/pipeline-assets/pipeline.js','/pipeline-assets/pipeline-embedded-claude.js'))
- const claudeHost=swap(await read('app/web/chatgpt.js'),[["frame.src=origin+'/pipeline-embedded'","frame.src=origin+'/pipeline-embedded-claude'"]])
- const claude=(await build({stdin:{contents:claudeHost,resolveDir:'app/web'},bundle:true,minify:true,write:false,format:'iife',target:'es2022'})).outputFiles[0].text
- await writeFile('dist/pipeline-claude.html',(await read('app/web/chatgpt.html')).replace('</body>',()=>'<script>'+claude.replace(/<\/script/gi,'<\\/script')+'</script></body>'))
+ const claudeShared=swap(shared,[['Copy message to ChatGPT','Copy message to Claude']])
+ const renderer=await readFile('dist/pipeline-renderer.html','utf8')
+ const claudeHost=swap(await read('app/web/claude.js'),[['__PIPELINE_RENDERER_PAGE__',JSON.stringify(renderer)]])
+ const claude=await bundle(claudeCommon+'\n'+claudeShared+'\n'+claudeHost)
+ const mark='data:image/png;base64,'+(await readFile(new URL('../assets/mark-dark-56.png',import.meta.url))).toString('base64')
+ const claudeShell=swap(shell,[['<link rel="icon" href="/trialagents-mark-black.png" type="image/png">',''],['src="/trialagents-mark-white.png"','src="'+mark+'"']])
+ await writeFile('dist/pipeline-claude.html',swap(claudeShell,[['<script src="/pipeline-assets/pipeline.js"></script>','<script>'+claude.replace(/<\/script/gi,'<\\/script')+'</script>']]))
 }
 await build({entryPoints:['mcp/http.mjs'],platform:'node',format:'cjs',target:'node22',bundle:true,outfile:'dist/pipeline-mcp.cjs',minify:true,legalComments:'eof'})

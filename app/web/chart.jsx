@@ -4,7 +4,7 @@ import {InteractiveVisualization} from './intel/InteractiveVisualization.tsx'
 import {fitFrame} from './fit-frame.js'
 let root
 function renderChart(container,html,title){
- if(window.pipelineHost&&!window.pipelineChatGPT){
+ if(window.pipelineHost&&!window.pipelineAssistant){
   root=createRoot(container)
   root.render(<InteractiveVisualization html={html} title={title} state={null} onChange={()=>{}}/>)
   return

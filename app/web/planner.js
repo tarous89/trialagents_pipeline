@@ -101,7 +101,7 @@ function render(){
  const banner=emptyWorkspaceTab(visibleExample());
  const content=tab==='Overview'?overview()+reviewQueue():tab==='Milestones'?work():tab==='Timeline'?timeline():tab==='Custom views'?viewsPage():tab.startsWith('custom-')?customTab():eventTabs[tab]?register(eventTabs[tab]):settingsPage();
  let action='';
- if(tab==='Custom views'&&window.pipelineChatGPT&&state.role!=='reader')action='<button class="primary" data-ask-view>Ask ChatGPT to create a custom view</button>';
+ if(tab==='Custom views'&&window.pipelineAssistant&&state.role!=='reader')action='<button class="primary" data-ask-view>Ask ChatGPT to create a custom view</button>';
  else if(!banner&&!['Settings','Custom views'].includes(tab)&&!tab.startsWith('custom-')&&state.role!=='reader')action='<button class="primary" data-add>＋ Add record</button>';
  into(el('app')).html='<div class="title"><h1>'+(tab==='Overview'?'Pipeline Overview':E(names[tab]||tab))+'</h1><div>'+action+'</div></div>'+content+banner;
  prepareFilterBar();decorateWorkspace();
