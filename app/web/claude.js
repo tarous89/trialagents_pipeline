@@ -48,7 +48,7 @@ async function callTool(name,args){
  return reply._meta?.pipeline??reply.structuredContent?.result
 }
 function route(next){
- if(next.pending){showError('The view save could not be verified.','Retry save',async()=>route(await callTool('retry_pipeline_view',{workspace:next.workspace,request_id:next.request_id})));return}
+ if(next.pending){showError('The view save could not be verified.','Retry save',async()=>route(await callTool('change_pipeline_app',{workspace:next.workspace,action:'retry_view',request_id:next.request_id})));return}
  if(next.reopen){
    const retry=async()=>route(await callTool('open_pipeline',{workspace:next.workspace,view:next.id}))
    void retry().catch(()=>showError('Your view was saved.','Open saved view',retry));return

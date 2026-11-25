@@ -64,6 +64,15 @@ How the Claude view works:
 - **Account pages.** Personal, Support and Billing open on the website.
 - **Resource.** The view is served as `ui://trialagents-pipeline/claude-workspace-v1.html` and declares no frame, connect or resource domains. The route still replaces `ui.domain` with Claude's sandbox host for this server, `902202f9dd8f7b5c489c362d072e95f2.claudemcpcontent.com`.
 
+**Claude tools and approvals.** The Claude route lists fewer tools than ChatGPT, so users approve two kinds of change. Every tool has a `title`.
+
+- **Read-only (`readOnlyHint: true`), no approval:** `open_pipeline`, `read_pipeline`, `read_pipeline_followup`, `read_active_pipeline_selection`, `get_pipeline_schema`, `preview_pipeline_archive`, `prepare_pipeline_view`, `read_pipeline_view` and `list_pipeline_views`.
+- **`edit_pipeline_records`** (`destructiveHint`, `openWorldHint`): `action` is `create`, `update` or `delete`, for one business record. Assignment and deadline changes may email workspace members.
+- **`change_pipeline_app`** (`destructiveHint`): custom tables, columns and relationships (add, update, archive, restore), workspace design (`customize`), and custom views (`create_view`, `update_view`, `retry_view`). It presents the workspace: saved views open on the view, other changes on Settings.
+- **`pipeline_workspace_request`:** app-only. Calls the panel makes never prompt. Invitations and other panel actions are the user's own clicks.
+
+Both combined tools run the same handlers as the individual ChatGPT tools. The Claude route refuses the individual write tool names. ChatGPT's tool list is unchanged.
+
 Code shared by both assistants lives in `app/web/assistant-workspace.js`. `app/web/embedded.js` is the ChatGPT frame host and `app/web/claude.js` is the Claude view host. To extend the workspace, change the shared files once. A new backend operation needs no extra wiring: both hosts send it through their transport.
 
 The Claude route runs the same handler, tools and store as ChatGPT. It has its own OAuth audience, metadata and gateway path. Claude writes follow the same assistant rules as ChatGPT and are recorded as Claude in audit history. The workspace panel accepts either assistant's token. Consent provisions the personal workspace for both audiences. In the shared web baseline, `pipelineResource(true)` now returns `/pipeline/claude`. Connect Claude to the dedicated review workspace and repeat the candidate checks before submission.

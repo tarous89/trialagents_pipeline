@@ -57,7 +57,7 @@ test('Claude shows the same workspace inside its own view, edits through the app
  assert.ok(await denied({op:'workspace.events',workspace}))
  assert.ok(await denied({op:'frame.connect',workspace}))
 
- const view=await assistant('create_pipeline_view',{workspace,revision:(await run(user,{op:'bootstrap',workspace})).revision,request_id:crypto.randomUUID(),view:{title:'Committee review',query:{table:'Program'},renderer:'interactive',presentation:'<label>Committee <input id="committee" data-filter></label><p data-filter-value="Alpha">Alpha</p><p data-filter-value="Beta">Beta</p>'}})
+ const view=await assistant('change_pipeline_app',{action:'create_view',workspace,revision:(await run(user,{op:'bootstrap',workspace})).revision,request_id:crypto.randomUUID(),view:{title:'Committee review',query:{table:'Program'},renderer:'interactive',presentation:'<label>Committee <input id="committee" data-filter></label><p data-filter-value="Alpha">Alpha</p><p data-filter-value="Beta">Beta</p>'}})
  assert.ok(!view.isError,JSON.stringify(view.content))
  const id=view.structuredContent.result.view.id
  const initial=await assistant('read_pipeline',{workspace,query:{table:'Program',fields:['name','status']}})
@@ -120,7 +120,7 @@ test('Claude shows the same workspace inside its own view, edits through the app
  assert.ok(sources.includes('Claude workspace'))
  // A record added from chat appears through revision checks.
  await frame.locator('[data-tab="Milestones"]').click()
- const created=await assistant('create_pipeline_record',{workspace,workspace_context:initial.structuredContent.result.workspace_context,table:'Program',values:{name:'Live program'},revision:(await run(user,{op:'bootstrap',workspace})).revision,request_id:crypto.randomUUID()})
+ const created=await assistant('edit_pipeline_records',{action:'create',workspace,workspace_context:initial.structuredContent.result.workspace_context,table:'Program',values:{name:'Live program'},revision:(await run(user,{op:'bootstrap',workspace})).revision,request_id:crypto.randomUUID()})
  assert.ok(!created.isError,JSON.stringify(created.content))
  await frame.getByRole('heading',{name:'Live program'}).waitFor({timeout:14000})
  // Saved views render in the bundled renderer.
