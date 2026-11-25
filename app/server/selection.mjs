@@ -38,3 +38,19 @@ export function selectionRelay({listen,publish}){
    }
  }
 }
+
+// Validates a panel's selection wait or answer. Both the first-party frame and the
+// bundled Claude view use it. userId and workspace come from the verified caller.
+export const panelInstance=/^([a-f0-9-]{36})\.[A-Za-z0-9_-]{22}$/
+export async function relayPanelSelection(selection,userId,workspace,req,signal){
+ const {instance,id,context}=req.input??{}
+ if(!selection||typeof instance!=='string'||!panelInstance.test(instance))throw Object.assign(Error('Invalid panel instance'),{status:400})
+ const scope=[userId,workspace,instance]
+ if(req.op==='selection.wait')return await selection.wait(scope,signal)??{}
+ if(typeof id!=='string'||!/^[a-f0-9-]{36}$/.test(id)||context&&(
+   context.workspace!==workspace||Buffer.byteLength(JSON.stringify(context))>6000||
+   Object.keys(context).some(k=>!['workspace','tab','filters','view','record','section','lastAction'].includes(k))
+ ))throw Object.assign(Error('Invalid selection response'),{status:400})
+ await selection.answer(scope,id,context??null)
+ return {}
+}

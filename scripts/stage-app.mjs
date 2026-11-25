@@ -6,7 +6,7 @@ import {fileURLToPath} from 'node:url'
 const root=fileURLToPath(new URL('../',import.meta.url)),host=process.argv[2]&&path.resolve(process.argv[2])
 if(!host||host===path.resolve(root))throw Error('Specify the existing shared web service build directory')
 const shared=path.join(root,'integration/shared-web')
-const required=['dist/pipeline.js','dist/pipeline.html','dist/pipeline-renderer.html','dist/pipeline-chatgpt.html','dist/pipeline-embedded.html','dist/pipeline-embedded.js','dist/pipeline-claude.html','dist/pipeline-embedded-claude.html','dist/pipeline-embedded-claude.js','dist/pipeline-mcp.cjs']
+const required=['dist/pipeline.js','dist/pipeline.html','dist/pipeline-renderer.html','dist/pipeline-chatgpt.html','dist/pipeline-embedded.html','dist/pipeline-embedded.js','dist/pipeline-claude.html','dist/pipeline-mcp.cjs']
 await Promise.all(required.map(f=>access(path.join(root,f))))
 const config=await readFile(path.join(host,'app/lib/oauth-config.ts'),'utf8')
 if(!config.includes('function pipelineResource('))throw Error('Expected the shared web baseline with standalone Pipeline enabled')

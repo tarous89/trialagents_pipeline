@@ -38,7 +38,8 @@ export function showBound(container,view,{save,more}={}){
  const safe=el('div');safe.append(fragment)
  for(const input of safe.querySelectorAll('input'))if(!['text','search','date','number','checkbox','range'].includes(input.type))input.type='text'
  frame.addEventListener('load',()=>frame.contentWindow.postMessage({channel,type:'mount',markup:safe.innerHTML,state:view.state??{},interactive},'*'),{once:true})
- frame.src='https://pipeline.trialagents.com/pipeline-renderer'
+ // A bundled host supplies its own copy of the renderer page; the others load it from the app origin.
+ frame.src=window.pipelineRendererSource?.()??'https://pipeline.trialagents.com/pipeline-renderer'
  let draft
  const button=el('button','Save control values')
  {

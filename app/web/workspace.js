@@ -12,8 +12,8 @@ function watchWorkspace(){
  if(document.hidden||!workspace){stopStream();return}
  if(watch?.workspace===workspace)return;
  stopStream();
- // Older assistant hosts only support JSON RPC and keep using revision polling.
- if(window.pipelineHost&&!window.pipelineChatGPT)return;
+ // Bundled and older assistant hosts only support JSON RPC and keep using revision polling.
+ if(window.pipelineHost&&(!window.pipelineAssistant||window.pipelineBundled))return;
  const controller=new AbortController();
  const connection={workspace,controller};watch=connection;
  async function connect(){
@@ -185,12 +185,12 @@ function firstItemCard(type, title) {
 function decorateWorkspace(){
   if(!state)return;
   const actions=el('pipeline-header')?.shadowRoot?.querySelector('.assistant-actions');
-  if(actions&&!window.pipelineChatGPT)into(actions).html=assistantActions('Open in');
+  if(actions&&!window.pipelineAssistant)into(actions).html=assistantActions('Open in');
   const holder=el('account-holder');
   if(holder){
     const frame=document.createElement('iframe');
     frame.className='account-frame';frame.title=settingTab;
-    frame.src='/pipeline-account?tab='+(settingTab==='Support'?'support':'account')+(window.pipelineChatGPT?'&surface=chatgpt':'');
+    frame.src='/pipeline-account?tab='+(settingTab==='Support'?'support':'account')+(window.pipelineAssistant==='ChatGPT'?'&surface=chatgpt':'');
     frame.addEventListener('load',()=>fitFrame(frame,'.pipeline-account'));
     holder.append(frame);
   }
@@ -238,13 +238,13 @@ function viewsPage(){
  const list=state.views.filter(v=>v.title.toLowerCase().includes(viewSearch.toLowerCase())&&(!viewAuthor||v.author===viewAuthor)&&(!viewProgram||v.filters?.program===viewProgram));
  return '<div class="filters"><label>Search views<input id="view-query" value="'+E(viewSearch)+'"></label><label>Creator<select id="view-author">'+opts([['','All creators'],...new Map(state.views.map(v=>[v.author,[v.author,v.author_name]])).values()],viewAuthor)+'</select></label><label>Program<select id="view-program">'+opts([['','All programs'],...data.filter(r=>r.type==='Program').map(r=>[r.id,r.name])],viewProgram)+'</select></label></div>'+
  panel('Saved views',table(['View','Creator',''],list.map(v=>['<button data-view="'+E(v.id)+'">'+E(v.title)+'</button>',E(v.author_name),(state.role==='owner'||(state.role==='editor'&&state.user.id===v.author))?'<button data-delete-view="'+E(v.id)+'">Remove</button>':'']))+
-   (list.length?'':'<p class="pad">'+(state.views.length?'No views match these filters.':state.role==='reader'?'No saved views yet.':window.pipelineChatGPT?'Ask ChatGPT to create your first custom view.':'Ask ChatGPT or Claude to create your first custom view.')+'</p>'))+
+   (list.length?'':'<p class="pad">'+(state.views.length?'No views match these filters.':state.role==='reader'?'No saved views yet.':window.pipelineAssistant?'Ask ChatGPT to create your first custom view.':'Ask ChatGPT or Claude to create your first custom view.')+'</p>'))+
  (selectedView?showView(state.views.find(v=>v.id===selectedView)):'');
 }
 const settingButton=(text,action)=>'<button type="button" data-action="'+action+'">'+text+'</button>';
 function settingsPage(){
  const owner=state.role==='owner';
- const sections=settingsSections.filter(n=>(owner||!['Billing','Team'].includes(n))&&(!window.pipelineChatGPT||n!=='Billing'));
+ const sections=settingsSections.filter(n=>(owner||!['Billing','Team'].includes(n))&&(!window.pipelineAssistant||n!=='Billing'));
  if(!sections.includes(settingTab))settingTab=sections[0];
  const menu='<div class="pipeline-settings"><nav class="settings-tabs" aria-label="Settings sections">'+sections.map(n=>'<button type="button" data-settings-section="'+n+'" aria-pressed="'+(settingTab===n)+'" class="'+(settingTab===n?'active':'')+'">'+sectionIcons[n]+n+'</button>').join('')+'</nav></div>';
  let body='';
@@ -252,7 +252,7 @@ function settingsPage(){
  if(settingTab==='App')body+=assistantSettings();
  if(settingTab==='Personal'||settingTab==='Support'){
    const part=settingTab==='Support'?'support':'account';
-   body=window.pipelineHost&&!window.pipelineChatGPT?panel(E(settingTab),'<div class="pad"><button data-external="/?section='+E(settingTab)+'&amp;workspace='+E(state.workspace)+'">Open '+E(settingTab)+' in TrialAgents</button></div>'):'<div id="account-holder"></div>';
+   body=window.pipelineHost&&(!window.pipelineAssistant||window.pipelineBundled)?panel(E(settingTab),'<div class="pad"><button data-external="/?section='+E(settingTab)+'&amp;workspace='+E(state.workspace)+'">Open '+E(settingTab)+' in TrialAgents</button></div>'):'<div id="account-holder"></div>';
  }
  if(settingTab==='Billing'){
   body=state.team?'<section class="combined-billing-card"><div><strong>Pipeline Team · Monthly subscription</strong><p>US$49 per workspace per month · Unlimited seats</p>'+(state.billing?.paidThrough?'<p>Paid through '+E(new Date(state.billing.paidThrough).toLocaleDateString())+'</p>':'')+'</div>'+settingButton('Manage billing','billing.portal')+'</section>':
@@ -266,7 +266,7 @@ function settingsPage(){
 function teamPanel(){
  const roster=sectionData?.members||[], invites=sectionData?.invitations||[];
  const ordered=[...roster.filter(m=>m.role==='owner'),...roster.filter(m=>m.role!=='owner')];
- const invite=state.team?'<form class="pad gearform" id="invite">'+field('email','Email',inp('email','','email','required'))+field('role','Access',sel('role',[['editor','Editor'],['reader','Read only']],'editor'))+'<button class="primary">Send invitation</button></form>':window.pipelineChatGPT?'<div class="pad"><p>Individual access is free. Team invitations are managed in the app.</p><button data-external="/?section=Team&amp;workspace='+E(state.workspace)+'">Open TrialAgents app ↗</button></div>':'<div class="pad"><p>Invite unlimited team members for US$49 per workspace per month.</p><button class="primary team-upgrade" data-action="billing.checkout">Upgrade · $49 / month</button></div>';
+ const invite=state.team?'<form class="pad gearform" id="invite">'+field('email','Email',inp('email','','email','required'))+field('role','Access',sel('role',[['editor','Editor'],['reader','Read only']],'editor'))+'<button class="primary">Send invitation</button></form>':window.pipelineAssistant?'<div class="pad"><p>Individual access is free. Team invitations are managed in the app.</p><button data-external="/?section=Team&amp;workspace='+E(state.workspace)+'">Open TrialAgents app ↗</button></div>':'<div class="pad"><p>Invite unlimited team members for US$49 per workspace per month.</p><button class="primary team-upgrade" data-action="billing.checkout">Upgrade · $49 / month</button></div>';
  return panel('Members',sectionData?.members?table(['Member','Access'],ordered.map(m=>[E(m.email),m.role==='owner'?'Owner':'<select data-member-role="'+E(m.user_id)+'">'+opts([['editor','Editor'],['reader','Read only'],['remove','Remove member']],m.role)+'</select>'])):'<p class="pad">Loading members…</p>')+
  panel('Invite team members',invite)+
  panel('Pending invitations',invites.length?table(['Recipient','Role',''],invites.map(i=>[E(i.email),E(i.role),'<button data-revoke="'+i.id+'">Revoke</button>'])):'<p class="pad">No pending invitations.</p>');
@@ -363,7 +363,7 @@ window.pipelineLocation=()=>{
  return url.href;
 };
 window.pipelineMount=async(snapshot,search=new URLSearchParams(location.search))=>{
- if(window.pipelineChatGPT){
+ if(window.pipelineAssistant){
   if(el('drawer').open)el('drawer').close();
   tab='Overview';filters={};selectedView='';sectionData=null;editing='';returnTo=null;expanded.clear();sectionLoad++;
  }
