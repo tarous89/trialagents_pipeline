@@ -15,12 +15,16 @@ async function bundle(source){
  return (await build({stdin:{contents:"import {riskLevels,riskLevel,riskExposure} from './app/server/risk.mjs';import {into} from './app/web/sanitize.js';import {showBound,resultTable} from './app/web/bound-view.js';import {paintChart} from './app/web/chart.jsx';import {fitFrame} from './app/web/fit-frame.js';import {assistantMark} from './app/web/assistant-marks.js';\n"+source,resolveDir:process.cwd()},bundle:true,loader:{'.svg':'text','.txt':'text'},jsx:'automatic',define:{'process.env.NODE_ENV':'"production"'},minify:true,format:'iife',target:'es2022',write:false})).outputFiles[0].text
 }
 const main=await bundle(common+'\n'+await read('app/web/browser.js'))
-await writeFile('dist/pipeline.js',main);await writeFile('dist/pipeline.html',shell)
+// Inter for the browser pages (as TrialAgents CTIS): the file is inlined so the page needs no other request. Their
+// Content-Security-Policy allows font-src data:. Widgets inside ChatGPT and Claude keep the host's fonts.
+const inter='@font-face{font-family:Inter;font-style:normal;font-weight:100 900;font-display:swap;src:url(data:font/woff;base64,'+(await readFile(new URL('../app/web/fonts/inter.woff',import.meta.url))).toString('base64')+") format('woff')}"
+const browserShell=shell.replace('<style>',()=>'<style>'+inter)
+await writeFile('dist/pipeline.js',main);await writeFile('dist/pipeline.html',browserShell)
 if(process.argv.includes('--widget')){
  const shared=await read('app/web/assistant-workspace.js')
  const embedded=await bundle(common+'\n'+shared+'\n'+await read('app/web/embedded.js'))
  await writeFile('dist/pipeline-embedded.js',embedded)
- await writeFile('dist/pipeline-embedded.html',shell.replace('/pipeline-assets/pipeline.js','/pipeline-assets/pipeline-embedded.js'))
+ await writeFile('dist/pipeline-embedded.html',browserShell.replace('/pipeline-assets/pipeline.js','/pipeline-assets/pipeline-embedded.js'))
  const chat=(await build({entryPoints:['app/web/chatgpt.js'],bundle:true,minify:true,write:false,format:'iife',target:'es2022'})).outputFiles[0].text
  await writeFile('dist/pipeline-chatgpt.html',(await read('app/web/chatgpt.html')).replace('</body>',()=>'<script>'+chat.replace(/<\/script/gi,'<\\/script')+'</script></body>'))
  const bridge=(await build({entryPoints:['app/web/host.js'],bundle:true,minify:true,write:false,format:'iife',target:'es2022'})).outputFiles[0].text
