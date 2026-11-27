@@ -95,9 +95,7 @@ test('Claude shows the same workspace inside its own view, edits through the app
    if(path==='/api/pipeline'&&r.request().postDataJSON().op==='workspace.events')return r.fulfill({status:503,body:'Stream offline'})
    if(path==='/api/pipeline')return r.fulfill({json:await run(user,r.request().postDataJSON())})
    if(path==='/trialagents-mark-white.png')return r.fulfill({path:'assets/mark-dark.png'})
-   // The browser page embeds Inter; a host's widget policy (like csp above) blocks embedded fonts, so the widget uses
-   // the system font. Block fonts here too, so the comparison below checks layout and content, not the typeface.
-   return r.fulfill({path:path==='/'?'dist/pipeline.html':'dist/pipeline.js',contentType:path==='/'?'text/html':'application/javascript',headers:path==='/'?{'Content-Security-Policy':"font-src 'none'"}:{}})
+   return r.fulfill({path:path==='/'?'dist/pipeline.html':'dist/pipeline.js',contentType:path==='/'?'text/html':'application/javascript'})
  })
  await Promise.all([standalone.goto('https://pipeline.trialagents.com/'),page.goto('https://host.example/')])
  const frame=page.frameLocator('iframe')
